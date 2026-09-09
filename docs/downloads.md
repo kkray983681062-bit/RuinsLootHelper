@@ -1,13 +1,16 @@
 # 下载
 
+**破晓装备助手完全免费，下载和使用均不收费。**
+
 | 渠道 | 入口 | 说明 |
 | --- | --- | --- |
-| GitHub | [Releases](https://github.com/kkray983681062-bit/RuinsLootHelper/releases) | Windows 完整发行包待上传 |
-| 蓝奏云 | [文件夹](https://wwaou.lanzoup.com/b01giaqhvg) | 密码 **71my**；2026-09-09 验证可访问，当前没有文件 |
-| 源码 | [仓库主页](https://github.com/kkray983681062-bit/RuinsLootHelper) | 使用 Code → Download ZIP，或 Git 克隆 |
+| GitHub | [最新版本](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/latest) | Windows 完整便携包，包含离线游戏组件 |
+| 蓝奏云 | [下载文件夹](https://wwaou.lanzoup.com/b01giaqhvg) | 密码 **71my**；由作者手动上传，以文件名版本号为准 |
 
-源代码 ZIP 不包含 Python 运行环境，也不是安装包。请按[开发说明](development.md)运行。
+当前发布版本为 **0.3.4**：[直接下载 ZIP](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.4/RuinsLootHelper-0.3.4-Windows-x64.zip)。文件约 72 MB，SHA-256 见同版本的 [SHA256SUMS.txt](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.4/SHA256SUMS.txt)。
 
-后续每个正式包会提供版本号、验证范围、文件大小与 SHA-256。GitHub 和蓝奏云应提供同一个文件；上传日期不能代替版本号。便携包需完整解压并保留 `_internal`，不能只复制 EXE。
+下载后完整解压，运行“破晓装备助手.exe”，保留 `_internal` 文件夹。首次安装游戏组件时直接读取包内文件，不需要连接 GitHub。
 
-当前没有自动下载或覆盖更新功能。新版上传后，以对应发布说明为准。
+助手支持检查新版和点击下载，不会直接覆盖正在运行的程序。新包完整解压后再使用，设置继续保存在 `%LOCALAPPDATA%\RuinsLootHelper`。
+
+开发者可查看 [source](../source/) 和[开发说明](development.md)。GitHub 的“Source code”及“Code → Download ZIP”提供源码，不包含可直接运行的 EXE。

@@ -1,5 +1,13 @@
 # 开发与构建
 
+程序、测试、运行资源和构建脚本已整体归入仓库的 `source/` 目录，内部相对路径保持不变。先进入该目录，再执行下文命令：
+
+```powershell
+cd source
+```
+
+本次只整理已公开的源码快照，源码版本字段仍为 `0.3.0`；当前 `0.3.4` 完整发行包见 [Releases](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/latest)，两者不要混为同一构建。
+
 ## 环境
 
 Windows 10/11 x64，Python 3.11 x64，安装 Python 时包含 Tcl/Tk。程序通过 Win32 API 和 Steam 安装记录工作，不支持在 Linux/macOS 上运行桌面功能。
@@ -10,7 +18,7 @@ Windows 10/11 x64，Python 3.11 x64，安装 Python 时包含 Tcl/Tk。程序通
 py -3.11 -B loot_app.py
 ```
 
-测试 Lua 和打包时，在项目根目录创建虚拟环境：
+测试 Lua 和打包时，在 `source/` 内创建虚拟环境：
 
 ```powershell
 py -3.11 -m venv .venv
@@ -26,7 +34,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -B packaging/build_release.py
 ```
 
-构建使用 PyInstaller 的 onedir 模式。完整产物在 `releases/<版本>/`；包含 EXE、`_internal`、说明、诊断 BAT 以及第三方许可。UE4SS 运行库在主动安装组件时另外下载，不捆绑进包。
+构建使用 PyInstaller 的 onedir 模式。此源码快照的完整产物在 `source/releases/<版本>/`；包含 EXE、`_internal`、说明、诊断 BAT 以及第三方许可。旧快照的组件安装仍需下载运行库；已发布的 0.3.4 完整包则内置组件，支持离线安装。
 
 版本字段位于 `loot_app.py`、`packaging/build_release.py` 和 `packaging/version.txt`；发布前同步更新。不要把当前最新源码自动等同于同号旧发行包。
 

@@ -5,4 +5,4 @@
 *.json text eol=lf
 *.yml text eol=lf
 *.bat text eol=crlf
-packaging/licenses/* -whitespace
+source/packaging/licenses/* -whitespace
