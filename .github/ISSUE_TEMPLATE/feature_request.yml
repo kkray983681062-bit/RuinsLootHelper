@@ -1,0 +1,18 @@
+name: 功能建议
+description: 提出新的筛选、交互或分发建议
+title: "[建议] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题？
+      placeholder: 描述使用时的不便和具体场景。
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 希望怎样改进？
+      placeholder: 可以描述操作流程或附简单示意。
+    validations:
+      required: true

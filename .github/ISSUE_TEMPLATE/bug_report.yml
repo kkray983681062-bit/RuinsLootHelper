@@ -1,0 +1,53 @@
+name: 问题反馈
+description: 报告闪退、读取、筛选、定位或界面问题
+title: "[问题] "
+body:
+  - type: markdown
+    attributes:
+      value: "请描述问题与复现步骤。公开提交前移除账号、存档内容和个人路径，无需上传整个游戏目录。"
+  - type: input
+    id: helper_version
+    attributes:
+      label: 助手版本
+      placeholder: 填写软件或发行包显示的版本号
+    validations:
+      required: true
+  - type: input
+    id: game_version
+    attributes:
+      label: 游戏版本
+      placeholder: 填写游戏显示的版本或 Steam 构建号
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Windows 版本
+      options:
+        - Windows 10 64 位
+        - Windows 11 64 位
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: download_source
+    attributes:
+      label: 下载渠道
+      options:
+        - GitHub
+        - 蓝奏云
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤、预期表现和实际表现
+      placeholder: 按操作顺序说明在哪一步出现了什么问题。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图或诊断结果（可选）
+      description: 可附不含个人信息的问题截图或诊断片段。

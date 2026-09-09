@@ -1,0 +1,25 @@
+This package includes the Python runtime, Tcl/Tk, and the PyInstaller bootloader.
+Their license texts are included in this folder.
+
+Python 3.11.9: https://www.python.org/psf/license/
+Tcl/Tk 8.6: https://www.tcl.tk/software/tcltk/license.html
+PyInstaller 6.22.2: https://pyinstaller.org/en/stable/license.html
+PyInstaller's bootloader exception permits distribution of bundled applications.
+
+Runtime resources are located according to the official PyInstaller guidance:
+https://pyinstaller.org/en/stable/runtime-information.html
+The application is distributed as one folder because it reads an elevated game:
+https://pyinstaller.org/en/stable/operating-mode.html
+
+Game names and attribute/skill terminology identify compatibility with
+Ruins of Dawn (Steam AppID 4364910). No game executables, images, textures,
+music, saves, or captured user inventory are included.
+
+
+Optional native bridge:
+UE4SS commit 2bfa839fe2945f9230204145646b5be4ae84fde8: MIT License.
+Verified source license: https://github.com/UE4SS-RE/RE-UE4SS/blob/2bfa839fe2945f9230204145646b5be4ae84fde8/LICENSE
+UE4SS runtime binaries are not included. The optional installer downloads a fixed official archive.
+rxi/json.lua: MIT; license retained in the Lua source header.
+Source: https://github.com/rxi/json.lua
+The included bridge scripts are in the native source folder with their license.

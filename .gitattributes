@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.py text eol=lf
+*.lua text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.bat text eol=crlf
+packaging/licenses/* -whitespace
