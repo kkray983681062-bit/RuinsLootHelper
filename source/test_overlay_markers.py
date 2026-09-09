@@ -68,7 +68,7 @@ class MarkerTests(unittest.TestCase):
             layer.update(1, config, sections, True, feature)
             self.assertEqual(layer.slots, [])
 
-    def test_automatic_mode_keeps_calibrated_circles_when_native_grid_is_missing(self):
+    def test_automatic_mode_never_reuses_static_calibration_when_live_grid_is_missing(self):
         layer = markers.MarkerLayer.__new__(markers.MarkerLayer)
         layer.window, layer.canvas = Mock(), Mock()
         layer.hwnd, layer.visible, layer.last_key = 2, False, None
@@ -80,10 +80,10 @@ class MarkerTests(unittest.TestCase):
              patch.object(markers, 'foreground_matches', return_value=True), patch.object(markers, 'u'):
             layer.update(1, {'enabled': True, 'automatic': True, 'grid': [0, 0, .5, .5]},
                          {'numeric': [{'index': 39}]}, True, feature)
-            self.assertTrue(layer.visible)
-            self.assertEqual(layer.slots, [39])
-            self.assertIn('校准', layer.reason)
-            layer.canvas.create_oval.assert_called()
+            self.assertFalse(layer.visible)
+            self.assertEqual(layer.slots, [])
+            self.assertIn('自动识别', layer.reason)
+            layer.canvas.create_oval.assert_not_called()
             layer.update(1, {'enabled': True, 'automatic': True},
                          {'numeric': [{'index': 39}]}, True, feature)
             self.assertFalse(layer.visible, 'no saved or native coordinates means no guessed circles')
@@ -106,6 +106,7 @@ class MarkerTests(unittest.TestCase):
         item = {'名字': '项链', '锁定': False, '极品属性': {'特殊属性': {'幸运': 4}}}
         entry = {'index': 44, 'item': item}
         payload = {'items': [entry]}
+        layer.automatic_boxes = lambda *_: {int(k): tuple(v) for k,v in native['grid']['slots'].items()}
         with patch.object(markers, 'game_bounds', return_value=(10, 20, 1200, 900)), \
              patch.object(markers, 'foreground_matches', return_value=True), patch.object(markers, 'u'):
             layer.update(1, config, select_sections(payload), True, feature)
@@ -118,6 +119,13 @@ class MarkerTests(unittest.TestCase):
             layer.update(1, config, select_sections(payload), True, feature)
             self.assertEqual(layer.slots, [44])
             self.assertTrue(layer.visible)
+            for box in native['grid']['slots'].values():
+                box[0] += 170
+                box[2] += 170
+                box[1] += 85
+                box[3] += 85
+            layer.update(1, config, select_sections(payload), True, feature)
+            layer.canvas.create_oval.assert_called_with(514, 429, 560, 475, outline='#ffdb62', width=3)
             entry['index'] = 41
             layer.update(1, config, select_sections(payload), True, feature)
             self.assertEqual(layer.slots, [41])

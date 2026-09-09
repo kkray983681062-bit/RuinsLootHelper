@@ -37,7 +37,7 @@ class SettingsTests(unittest.TestCase):
         try:
             dialog = Settings(host, show=False)
             buttons = [child for frame in dialog.window.winfo_children() for child in frame.winfo_children()
-                       if isinstance(child, tk.Button) and child.cget('text') == '应用']
+                       if isinstance(child, tk.Button) and child.cget('text') == '保存设置']
             self.assertEqual(len(buttons), 1)
             apply = buttons[0]
             dialog.window.geometry('720x610+-10000+-10000')
@@ -77,9 +77,9 @@ class SettingsTests(unittest.TestCase):
         host.root = root
         try:
             dialog = Settings(host, show=False)
-            self.assertEqual(dialog.window.title(), '功能设置')
+            self.assertEqual(dialog.window.title(), '破晓装备助手 · 功能设置')
             self.assertEqual([dialog.features.tab(tab, 'text') for tab in dialog.features.tabs()],
-                             ['筛选设置', '背包定位', '原生功能', '屏蔽排除库'])
+                             ['装备筛选', '背包定位', '进阶辅助', '悬浮窗', '作者的话', '项目与更新', '掉落屏蔽清单'])
             self.assertIn('下技能', [dialog.tabs.tab(tab, 'text') for tab in dialog.tabs.tabs()])
             self.assertEqual(len(dialog.enabled_vars), 74)
             self.assertEqual(sum(x.get() for x in dialog.enabled_vars), 11)
@@ -145,14 +145,14 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(reopened.native_settings.interval_choice.get(), .5)
             self.assertEqual(reopened.native_settings.batch_choice.get(), 3)
             groups = reopened.native_settings.radio_groups
-            self.assertEqual([len(group) for group in groups], [3, 4, 5])
+            self.assertEqual([len(group) for group in groups], [3, 4, 4])
             groups[0][0].invoke()
             self.assertEqual(reopened.native_settings.range_choice.get(), 1.0)
             self.assertEqual(reopened.native_settings.interval_choice.get(), .5)
             self.assertEqual(reopened.native_settings.batch_choice.get(), 3)
             groups[2][0].invoke()
-            self.assertEqual(reopened.native_settings.batch_choice.get(), 0)
-            self.assertEqual(reopened.native_settings.values()['native']['pickup_batch'], 0)
+            self.assertEqual(reopened.native_settings.batch_choice.get(), 1)
+            self.assertEqual(reopened.native_settings.values()['native']['pickup_batch'], 1)
             reopened.cancel()
         finally:
             root.destroy()

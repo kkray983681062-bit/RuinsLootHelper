@@ -5,6 +5,8 @@ function M.new(adapter)
     local self = { adapter = adapter, attempts = {}, seen = {}, seen_order = {}, acks = {}, last_pick = -100, last_recycle = -100, next_scan = 0, session = nil }
     function self:step(req, now, utc)
         if type(req) ~= "table" or req.protocol ~= 4 or type(req.expires) ~= "number" or utc > req.expires then
+            if self.adapter.stop_grid then self.adapter:stop_grid() end
+            if self.adapter.stop_bagua then self.adapter:stop_bagua() end
             return { ready = false, state = "helper_offline" }
         end
         if self.session ~= req.session then
@@ -15,12 +17,15 @@ function M.new(adapter)
         end
         local state = self.adapter:snapshot(req)
         if not state.valid or state.player_address ~= req.player_address then
+            if self.adapter.stop_grid then self.adapter:stop_grid() end
+            if self.adapter.stop_bagua then self.adapter:stop_bagua() end
             return { ready = false, state = "waiting_for_current_player" }
         end
         -- Use the game's real clock rather than the last mailbox timestamp,
         -- so a 0.15 s interval is not rounded up to the file polling period.
         if self.adapter.clock then now = self.adapter:clock() end
         if type(now) ~= "number" or now ~= now or now == math.huge or now < 0 then
+            if self.adapter.stop_bagua then self.adapter:stop_bagua() end
             return {ready=false,state="invalid_clock"}
         end
         if self.last_clock and now < self.last_clock then
@@ -30,6 +35,17 @@ function M.new(adapter)
         local result = { ready = true, state = "ready", player_address = state.player_address,
             backpack_open = state.backpack_open, free_slots = state.free_slots, acks = self.acks,
             auto_recycle_supported = type(self.adapter.recycle) == "function" }
+        if self.adapter.bagua_step then
+            result.bagua_supported = true
+            local ok, marker = pcall(function() return self.adapter:bagua_step(req,now) end)
+            result.bagua = ok and marker or {state='error',error=tostring(marker)}
+            if not ok and self.adapter.stop_bagua then pcall(function() self.adapter:stop_bagua() end) end
+        end
+        if self.adapter.rift_step then
+            result.rift_supported = true
+            local ok, rift = pcall(function() return self.adapter:rift_step(req, now, state) end)
+            result.rift = ok and rift or {state="error", checked=false, eligible=false, error=tostring(rift)}
+        end
         if self.adapter.update_drop_filter then
             local ok, status = pcall(function() return self.adapter:update_drop_filter(req) end)
             result.drop_filter = ok and status or {state="error", error=tostring(status)}
@@ -40,8 +56,14 @@ function M.new(adapter)
             result.fullscreen = ok and mode or "unavailable"
         elseif not req.borderless then self.borderless_done = false end
         if req.markers and state.backpack_open and req.active then
-            local ok, grid = pcall(function() return self.adapter:grid(req) end)
-            if ok then result.grid = grid else result.grid_error = tostring(grid) end
+            local ok, grid, info = pcall(function() return self.adapter:grid(req) end)
+            if ok then result.grid, result.grid_status = grid, info
+            else
+                result.grid_error = tostring(grid)
+                if self.adapter.stop_grid then self.adapter:stop_grid() end
+            end
+        elseif self.adapter.stop_grid then
+            self.adapter:stop_grid()
         end
         if req.active and not state.dragging then
             for _, cmd in ipairs(req.locks or {}) do

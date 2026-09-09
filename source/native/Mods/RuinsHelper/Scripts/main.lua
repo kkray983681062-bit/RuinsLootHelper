@@ -29,12 +29,14 @@ LoopAsync(50, function()
     if outgoing then publish(outgoing); outgoing = nil end
     if pending then return false end
     local request = read_request()
-    if not request then return false end
+    -- A missing mailbox must also hide our marker after the helper closes.
+    request = request or {}
     pending = true
     ExecuteInGameThread(function()
         local ok, result = pcall(function()
             return engine:step(request, request.monotonic or 0, os.time())
         end)
+        if not ok and adapter.stop_bagua then pcall(function() adapter:stop_bagua() end) end
         outgoing = ok and result or {ready=false, state="adapter_error", error=tostring(result)}
         outgoing.session = request.session
         outgoing.game_pid = request.game_pid

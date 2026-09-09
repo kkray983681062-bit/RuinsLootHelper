@@ -144,7 +144,7 @@ class ReleaseLifecycleTests(unittest.TestCase):
                     overlay.place()
                 actual = wintypes.RECT()
                 original(overlay.hwnd, ctypes.byref(actual))
-                self.assertEqual((actual.left, actual.top), (-1344, -860))
+                self.assertEqual((actual.left, actual.top), (-1760, -900))
             finally:
                 for callback in overlay.root.tk.call('after', 'info'):
                     overlay.root.tk.call('after', 'cancel', callback)

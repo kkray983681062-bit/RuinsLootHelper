@@ -14,7 +14,7 @@ from game_install import discover, resolve_game
 from release_runtime import write_json
 from worker_process import ProcessBackend
 
-VERSION = '0.3.0'
+VERSION = '0.3.5'
 TITLE = '破晓装备助手'
 DATA_NAME = 'RuinsLootHelper'
 
@@ -136,12 +136,12 @@ def run_overlay(directory, backend, close_after=None):
             super().close()
 
     overlay = PackagedOverlay()
-    startup = StartupWindow(overlay, backend.game, VERSION)
+    startup = StartupWindow(overlay, backend.game, VERSION, directory=directory)
     window = startup.window
 
     def update():
         state = backend.state
-        if state['status'] == 'watching' and overlay.placed and overlay.root.winfo_viewable():
+        if state['status'] == 'watching' and overlay.placed and overlay.root.winfo_viewable() and not startup.user_open:
             window.withdraw()
         else:
             startup.set_state(state)

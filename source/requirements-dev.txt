@@ -1,3 +1,4 @@
-# Windows x64 / Python 3.11. Runtime desktop code uses the standard library.
+# Windows x64 / Python 3.11. Runtime dependencies include image-based bag location.
+-r requirements.txt
 PyInstaller==6.22.2
 lupa==2.8

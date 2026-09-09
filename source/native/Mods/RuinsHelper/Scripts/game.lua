@@ -1,6 +1,14 @@
 -- SPDX-License-Identifier: MIT
 -- Ruins of Dawn 1.15 / UE 5.5 adapter. All methods execute on the game thread.
 local M = { actors = {}, refresh_at = 0, notified = false }
+function M:bagua_step(req,now)
+    if not self.bagua_control and req.bagua_marker~=true then return {state='off'} end
+    if not self.bagua_control then self.bagua_control=require('bagua').new() end
+    return self.bagua_control:step(req,now)
+end
+function M:stop_bagua()
+    if self.bagua_control then self.bagua_control:stop() end
+end
 local function valid(o) return o and o:IsValid() end
 local function flag(o, key)
     local value = o[key]
@@ -66,6 +74,11 @@ end
 function M:update_drop_filter(req)
     if not self.drop_filter then self.drop_filter = require("drop_filter").new() end
     return self.drop_filter:update(req)
+end
+
+function M:rift_step(req, now, state)
+    if not self.rift_engine then self.rift_engine = require("rifts").new() end
+    return self.rift_engine:step(self.player, req, now, state)
 end
 
 function M:borderless()
@@ -260,34 +273,11 @@ function M:grid(req)
     if not valid(panel) then return nil end
     local wrap = panel["格子框"]
     if not valid(wrap) then return nil end
-    -- GetAllChildren returns RemoteUnrealParam entries in pinned UE4SS, not
-    -- UWidget objects (calling IsValid on those wrappers raises an error).
-    -- GetChildAt returns the actual UObject directly, with a zero-based index.
-    if wrap:GetChildrenCount() ~= 60 then return nil end
-    local slots, count = {}, 0
-    -- Traverse the active player's 60 main-bag cells, not all live widgets
-    -- (storage, hidden copies and other players can reuse the same slot ids).
-    -- Read geometry afresh so moving the bag does not reuse the old position.
-    for i = 0, 59 do
-        local widget = wrap:GetChildAt(i)
-        if valid(widget) and flag(widget, "在背包") and not flag(widget, "在仓库") then
-            local index = widget["格子id"]
-            if type(index) == "number" and index >= 0 and index < 60 and widget:IsVisible() then
-                local geometry = widget:GetCachedGeometry()
-                local size = slate:GetLocalSize(geometry)
-                local first, first_view, last, last_view = {}, {}, {}, {}
-                slate:LocalToViewport(self.player, geometry, {X=0,Y=0}, first, first_view)
-                slate:LocalToViewport(self.player, geometry, {X=size.X,Y=size.Y}, last, last_view)
-                if first.X and last.X and first.Y and last.Y and last.X > first.X + 8 and last.Y > first.Y + 8 then
-                    local key = tostring(index)
-                    if slots[key] then return nil end
-                    slots[key] = {first.X, first.Y, last.X, last.Y}
-                    count = count + 1
-                end
-            end
-        end
-    end
-    if count ~= 60 then return nil end
-    return {slots=slots, viewport=req.viewport, player_address=self.player:GetAddress()}
+    if not self.geometry then self.geometry=require("bag_geometry").new(slate) end
+    return self.geometry:read(wrap,self.player,req)
+end
+
+function M:stop_grid()
+    if self.geometry then self.geometry:stop() end
 end
 return M

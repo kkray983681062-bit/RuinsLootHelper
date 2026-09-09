@@ -1,13 +1,12 @@
-"""Install a pinned optional UE4SS bridge without replacing existing mods."""
+"""Install a verified, bundled UE4SS bridge without network access or replacing mods."""
 import hashlib
 import json
 from pathlib import Path
-import shutil
-import urllib.request
 import zipfile
 
 URL = 'https://github.com/UE4SS-RE/RE-UE4SS/releases/download/experimental-latest/UE4SS_v3.0.1-1127-g2bfa839f.zip'
 SHA256 = '29367ce89f3637a537d507f2c79b9d33df3d145c63fd8bb0179f737a5ce46374'
+ARCHIVE_NAME = 'UE4SS-2bfa839f.zip'
 ROOT = Path(__file__).resolve().parent
 RUNTIME_FILES = ('dwmapi.dll', 'ue4ss/UE4SS.dll', 'ue4ss/LICENSE', 'ue4ss/UE4SS-settings.ini')
 
@@ -43,19 +42,15 @@ def install(game, directory, archive=None):
             raise ValueError('安装记录的路径无效，未修改文件。')
         if path.exists() and sha(path) != digest:
             raise ValueError(f'原生组件已被修改，未覆盖：{relative}')
-    cache = directory / 'native-cache'
-    cache.mkdir(parents=True, exist_ok=True)
-    archive = Path(archive) if archive else cache / 'UE4SS-2bfa839f.zip'
-    if not archive.exists():
-        temporary = archive.with_suffix('.download')
-        request = urllib.request.Request(URL, headers={'User-Agent': 'RuinsLootHelper/0.3'})
-        with urllib.request.urlopen(request, timeout=40) as response, temporary.open('wb') as output:
-            shutil.copyfileobj(response, output)
-        if sha(temporary) != SHA256:
-            raise ValueError('原生运行库校验失败，未安装。')
-        temporary.replace(archive)
+    if archive is None:
+        bundled = ROOT / 'runtime' / ARCHIVE_NAME
+        archive = bundled if bundled.is_file() else directory / 'native-cache' / ARCHIVE_NAME
+    else:
+        archive = Path(archive)
+    if not archive.is_file():
+        raise ValueError('离线组件包缺失，请完整解压新版助手并保留 _internal 文件夹。')
     if sha(archive) != SHA256:
-        raise ValueError('原生运行库校验失败，未安装。')
+        raise ValueError('离线组件包校验失败，请重新解压或下载完整助手，未安装。')
     content = {}
     with zipfile.ZipFile(archive) as package:
         for name in RUNTIME_FILES:

@@ -97,7 +97,7 @@ class Overlay:
         self.root.withdraw()
         guard_tk(self.root)
         self.feed = OverlayFeed(BASE)
-        self.root.title('背包剩余空位：读取中')
+        self.root.title('空位：读取中 · 免费助手')
         self.root.configure(bg=self.BG)
         self.root.minsize(320, 230)
         self.root.attributes('-topmost', True)
@@ -107,11 +107,13 @@ class Overlay:
         self.root.report_callback_exception = self.callback_error
         bar = tk.Frame(self.root, bg=self.BG)
         bar.pack(fill='x', padx=12, pady=(9, 4))
-        self.status_label = tk.Label(bar, text='正在读取', fg='#d5eee3', bg=self.BG, font=('Microsoft YaHei UI', 10))
-        self.status_label.pack(side='left')
-        self.settings_button = tk.Button(bar, text='功能设置', command=self.edit_rules, bg='#263541', fg='#e6d4a2', relief='flat', padx=9, takefocus=False)
+        self.status_label = tk.Label(bar, text='正在读取', fg='#d5eee3', bg=self.BG, font=('Microsoft YaHei UI', 9))
+        self.status_label.pack(anchor='w')
+        actions = tk.Frame(bar, bg=self.BG)
+        actions.pack(fill='x', pady=(5, 0))
+        self.settings_button = tk.Button(actions, text='功能设置', command=self.edit_rules, bg='#263541', fg='#e6d4a2', relief='flat', padx=9, takefocus=False)
         self.settings_button.pack(side='right')
-        self.display_button = tk.Button(bar, text='显示栏目', command=self.show_sections, bg='#263541', fg='#e6d4a2', relief='flat', padx=7, takefocus=False)
+        self.display_button = tk.Button(actions, text='显示栏目', command=self.show_sections, bg='#263541', fg='#e6d4a2', relief='flat', padx=7, takefocus=False)
         self.display_button.pack(side='right', padx=(0, 5))
         self.display_popup = None
         self.section_vars = {}
@@ -185,9 +187,9 @@ class Overlay:
             lower_rows.append((position(item['index'], columns) + f" · {item['tier_label']} {item['type_label']}", 'place'))
             lower_rows.append(('；'.join(x['name'] for x in item['addable_skills']), 'hit'))
         if not numeric:
-            numeric_rows.append(('当前没有达到数值门槛的装备' if live else '等待读取，旧结果已清空', 'muted'))
+            numeric_rows.append(('暂无达标装备' if live else '等待读取，旧结果已清空', 'muted'))
         if not skills:
-            skill_rows.append(('当前背包没有符合筛选的上技能装备' if live else '等待读取', 'muted'))
+            skill_rows.append(('暂无符合条件的上技能' if live else '等待读取', 'muted'))
         if not lower:
             lower_rows.append(('当前背包没有符合筛选的下技能装备' if live else '等待读取', 'muted'))
         for widget, rows in zip(self.text_widgets, (numeric_rows, skill_rows, lower_rows)):
@@ -227,7 +229,8 @@ class Overlay:
     def save_geometry(self):
         self.save_job = None
         settings = self.read_file('loot-overlay-settings.json', self.settings)
-        settings.update(width=self.root.winfo_width(), height=self.root.winfo_height(), x=self.root.winfo_x(), y=self.root.winfo_y())
+        settings.update(width=self.root.winfo_width(), height=self.root.winfo_height(),
+                        x=self.root.winfo_x(), y=self.root.winfo_y(), window_position_version=1)
         self.write_file('loot-overlay-settings.json', settings)
         self.settings = settings
 
@@ -237,8 +240,12 @@ class Overlay:
             return
         width = max(320, self.settings.get('width', 460))
         height = max(230, self.settings.get('height', 480))
-        x = self.settings.get('x', rect.right - width - 24)
-        y = self.settings.get('y', rect.bottom - height - self.settings.get('bottom_margin', 160))
+        x = rect.left + (rect.right - rect.left - width) // 2
+        y = rect.top + (rect.bottom - rect.top - height) // 2
+        # Center once after upgrading; subsequent user moves keep their position.
+        if self.settings.get('window_position_version') == 1:
+            x = self.settings.get('x', x)
+            y = self.settings.get('y', y)
         x = max(rect.left, min(x, rect.right - 120))
         y = max(rect.top + 20, min(y, rect.bottom - 100))
         # Tk accepts signed offsets, but treats negative offsets as distances
@@ -270,6 +277,8 @@ class Overlay:
         if key == self.appearance_key:
             return
         transparent, opacity, font = key
+        if transparent:
+            opacity = 1.0
         if not self.hwnd:
             self.root.attributes('-alpha', opacity)
             self.root.attributes('-transparentcolor', self.BG if transparent else '')
@@ -295,6 +304,9 @@ class Overlay:
 
     def edit_rules(self):
         self.panes.release()
+        if getattr(self, 'main_window', None):
+            self.main_window.show()
+            return
         if self.display_popup and self.display_popup.winfo_exists():
             self.display_popup.destroy()
             self.display_popup = None
@@ -326,11 +338,11 @@ class Overlay:
                 self.render(sections, live)
                 self.write_file('matches-current.json', dict(sections, live=live))
                 self.last_render = key
-            status_text = f"监测中 · {sum(x.get('enabled', True) for x in rules)} 项已选" if live else '等待读取'
+            status_text = f"正在筛选 · 已启用{sum(x.get('enabled', True) for x in rules)}条规则" if live else '等待读取'
             if self.status_label.cget('text') != status_text:
                 self.status_label.configure(text=status_text)
             self.free_slots = current.get('backpack_free_slots') if live else None
-            title = f"背包剩余空位：{self.free_slots if self.free_slots is not None else '待核准'}"
+            title = f"空位：{self.free_slots if self.free_slots is not None else '读取中'} · 免费助手"
             if self.root.title() != title:
                 self.root.title(title)
             if not self.game or not u.IsWindow(self.game):

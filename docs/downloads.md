@@ -7,7 +7,7 @@
 | GitHub | [最新版本](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/latest) | Windows 完整便携包，包含离线游戏组件 |
 | 蓝奏云 | [下载文件夹](https://wwaou.lanzoup.com/b01giaqhvg) | 密码 **71my**；由作者手动上传，以文件名版本号为准 |
 
-当前发布版本为 **0.3.4**：[直接下载 ZIP](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.4/RuinsLootHelper-0.3.4-Windows-x64.zip)。文件约 72 MB，SHA-256 见同版本的 [SHA256SUMS.txt](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.4/SHA256SUMS.txt)。
+当前预览版本为 **0.3.5**：[直接下载 ZIP](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.5/RuinsLootHelper-0.3.5-Windows-x64.zip)。文件约 72 MB，SHA-256 见同版本的 [SHA256SUMS.txt](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/download/v0.3.5/SHA256SUMS.txt)。新组件合并后的游戏内验证尚未完成，详见[验证与限制](validation.md)。
 
 下载后完整解压，运行“破晓装备助手.exe”，保留 `_internal` 文件夹。首次安装游戏组件时直接读取包内文件，不需要连接 GitHub。
 

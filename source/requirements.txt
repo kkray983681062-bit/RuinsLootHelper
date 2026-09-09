@@ -1,0 +1,4 @@
+# Same versions used for the validated Windows build.
+numpy==2.4.6
+opencv-python-headless==5.0.0.93
+mss==10.2.0

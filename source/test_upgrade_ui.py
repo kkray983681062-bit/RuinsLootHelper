@@ -68,19 +68,19 @@ class UIUpgradeTests(unittest.TestCase):
             self.overlay.root.tk.call('ttk::combobox::Unpost', str(combo))
             combo.destroy()
 
-    def test_startup_install_guide_opens_native_tab_without_installing_or_changing_settings(self):
+    def test_shared_main_window_opens_native_page_without_installing_or_changing_settings(self):
         from startup_window import StartupWindow
         before = self.overlay.read_file('loot-overlay-settings.json', {})
         guide = StartupWindow(self.overlay, r'D:\Steam\Ruins of Dawn\RuinsOfDawn.exe', '0.3.0', show=False)
         try:
             with patch('native_support.install') as install:
-                guide.native_button.invoke()
+                guide.open_native()
                 dialog = self.overlay.settings_dialog
                 dialog.window.attributes('-alpha', 0)
                 self.pump(.05)
                 self.assertEqual(dialog.features.select(), str(dialog.native_settings.tab))
                 dialog.features.select(dialog.filter_page)
-                guide.native_button.invoke()
+                guide.open_native()
                 self.assertIs(dialog, self.overlay.settings_dialog)
                 self.assertEqual(dialog.features.select(), str(dialog.native_settings.tab))
                 install.assert_not_called()

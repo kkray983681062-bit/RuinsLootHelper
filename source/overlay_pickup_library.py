@@ -12,8 +12,9 @@ class PickupLibrarySettings:
         self.dialog = dialog
         self.model = ExclusionLibrary(catalog_data()['equipment'], dialog.settings.get('pickup_exclusions', []),
                                       codex_selection(dialog.settings))
-        self.tab = tk.Frame(dialog.features, bg='#111a24')
-        dialog.features.add(self.tab, text='屏蔽排除库')
+        self.tab = tk.Frame(dialog.features, bg='#191d21')
+        dialog.features.add(self.tab, text='掉落屏蔽清单', hidden=True)
+        dialog.button(self.tab, '‹ 返回进阶辅助', lambda: dialog.features.select(dialog.native_settings.tab)).pack(anchor='w', pady=(4, 8))
         self.category = tk.StringVar(master=self.tab, value='全部类型')
         self.query = tk.StringVar(master=self.tab)
         self.tier = tk.StringVar(master=self.tab, value='全部 T 级')
@@ -25,33 +26,33 @@ class PickupLibrarySettings:
         self.tiers = {'全部 T 级': None, **{r['tier']: r['tier_raw'] for r in equipment}}
         self.parts = {'全部部位': None, **{r['type_label']: r['type_id'] for r in equipment}}
         dialog.label(self.tab, '勾选 = 屏蔽新掉落；装备按名称、T 级和部位区分。', anchor='w').pack(fill='x', padx=12, pady=(12, 3))
-        dialog.label(self.tab, '地上原有物品继续跳过拾取；修改后点“应用”生效。', anchor='w').pack(fill='x', padx=12, pady=(0, 5))
+        dialog.label(self.tab, '地上原有物品继续跳过拾取；修改后点“保存设置”生效。', anchor='w').pack(fill='x', padx=12, pady=(0, 5))
         self.all_codex = tk.IntVar(master=self.tab)
         self.all_codex_check = dialog.check(self.tab, '屏蔽全部图鉴（63 种）', self.all_codex)
         self.all_codex_check.configure(command=self.choose_all_codex, tristatevalue=-1)
         self.all_codex_check.pack(anchor='w', padx=8, pady=(0, 6))
-        search = tk.Frame(self.tab, bg='#111a24')
+        search = tk.Frame(self.tab, bg='#191d21')
         search.pack(fill='x', padx=12)
         dialog.label(search, '搜索').pack(side='left', padx=(0, 8))
         self.entry = tk.Entry(search, textvariable=self.query, bg='#263541', fg='#f0e7d4', insertbackground='white', relief='flat')
         self.entry.pack(side='left', fill='x', expand=True, ipady=7)
-        filters = tk.Frame(self.tab, bg='#111a24')
+        filters = tk.Frame(self.tab, bg='#191d21')
         filters.pack(fill='x', padx=12, pady=8)
         for variable, choices in ((self.category, ('全部类型', '装备', '图鉴')), (self.tier, self.tiers), (self.part, self.parts)):
             combo = ttk.Combobox(filters, textvariable=variable, values=list(choices), state='readonly', width=11)
             combo.pack(side='left', padx=(0, 8))
         dialog.check(filters, '只看已勾选', self.only_selected).pack(side='left')
-        actions = tk.Frame(self.tab, bg='#111a24')
+        actions = tk.Frame(self.tab, bg='#191d21')
         actions.pack(fill='x', padx=12, pady=(0, 8))
-        dialog.button(actions, '排除当前结果', lambda: self.bulk(True)).pack(side='left', padx=(0, 8))
-        dialog.button(actions, '取消当前结果', lambda: self.bulk(False)).pack(side='left', padx=(0, 8))
-        dialog.button(actions, '清空排除', self.clear).pack(side='left')
+        dialog.button(actions, '全选', lambda: self.bulk(True)).pack(side='left', padx=(0, 8))
+        dialog.button(actions, '取消全选', lambda: self.bulk(False)).pack(side='left', padx=(0, 8))
+        dialog.button(actions, '清空已选', self.clear).pack(side='left')
         self.counter = dialog.label(self.tab, '', anchor='w')
         self.counter.pack(side='bottom', fill='x', padx=12, pady=8)
-        container = tk.Frame(self.tab, bg='#111a24')
+        container = tk.Frame(self.tab, bg='#191d21')
         container.pack(fill='both', expand=True, padx=12)
         style = ttk.Style(self.tab)
-        style.configure('Pickup.Treeview', background='#18232e', fieldbackground='#18232e', foreground='#e7e2d7', rowheight=29, borderwidth=0)
+        style.configure('Pickup.Treeview', background='#24292f', fieldbackground='#24292f', foreground='#e7e2d7', rowheight=29, borderwidth=0)
         style.configure('Pickup.Treeview.Heading', background='#263541', foreground='#e6d4a2', relief='flat')
         style.map('Pickup.Treeview', background=[('selected', '#394b57')], foreground=[('selected', '#ffe08a')])
         self.tree = ttk.Treeview(container, columns=('excluded', 'name', 'tier', 'part'), show='headings', selectmode='browse', style='Pickup.Treeview')
@@ -94,10 +95,11 @@ class PickupLibrarySettings:
         names=set(self.model.codex_values())
         count=len(names & codex_names())
         self.all_codex.set(1 if count==len(codex_names()) else -1 if count else 0)
-        self.dialog.native_settings.codex_summary.configure(text=f'图鉴屏蔽：已选 {count} / 63 种（与排除库同步）')
+        self.dialog.native_settings.codex_summary.configure(text=f'图鉴屏蔽：已选 {count} / 63 种')
         self.counter.configure(text=f'已选装备 {len(self.model.equipment_values())} 项 / 图鉴 {len(names)} 项 · 当前显示 {len(self.visible)} 项')
 
     def choose_all_codex(self):
+        self.dialog.mark_dirty()
         self.model.set_rows(self.model.find(category='图鉴'), self.all_codex.get()==1)
         self.redraw()
 
@@ -105,6 +107,7 @@ class PickupLibrarySettings:
         if not key or not self.tree.exists(key):
             return
         self.model.toggle(key)
+        self.dialog.mark_dirty()
         if self.only_selected.get():
             self.redraw()
         else:
@@ -126,10 +129,12 @@ class PickupLibrarySettings:
         return 'break'
 
     def bulk(self, excluded):
+        self.dialog.mark_dirty()
         self.model.set_rows(self.results(), excluded)
         self.redraw()
 
     def clear(self):
+        self.dialog.mark_dirty()
         self.model.selected.clear()
         self.redraw()
 

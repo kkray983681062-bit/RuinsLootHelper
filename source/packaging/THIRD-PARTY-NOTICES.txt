@@ -12,14 +12,20 @@ The application is distributed as one folder because it reads an elevated game:
 https://pyinstaller.org/en/stable/operating-mode.html
 
 Game names and attribute/skill terminology identify compatibility with
-Ruins of Dawn (Steam AppID 4364910). No game executables, images, textures,
-music, saves, or captured user inventory are included.
+Ruins of Dawn (Steam AppID 4364910). A small header-lock reference image
+from the user's screenshot is included for backpack location matching.
+No game executables, music, saves, or captured user inventory are included.
+
+Automatic backpack location also includes OpenCV, NumPy and MSS.
+Their distribution license texts and bundled third-party notices are
+included in files prefixed opencv-python-headless-, numpy- and mss- in this license folder.
 
 
 Optional native bridge:
 UE4SS commit 2bfa839fe2945f9230204145646b5be4ae84fde8: MIT License.
 Verified source license: https://github.com/UE4SS-RE/RE-UE4SS/blob/2bfa839fe2945f9230204145646b5be4ae84fde8/LICENSE
-UE4SS runtime binaries are not included. The optional installer downloads a fixed official archive.
+The fixed official UE4SS runtime archive is included in _internal/runtime for offline installation.
+The installer verifies its SHA-256 before use. The archive and UE4SS-MIT.txt retain the upstream license.
 rxi/json.lua: MIT; license retained in the Lua source header.
 Source: https://github.com/rxi/json.lua
 The included bridge scripts are in the native source folder with their license.

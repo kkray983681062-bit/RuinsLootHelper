@@ -1,4 +1,4 @@
-"""Bounded, read-only inspection of the configured Ruins of Dawn process.
+"""Bounded, read-only inspection of this user's running Ruins of Dawn.
 
 Uses PROCESS_QUERY_INFORMATION | PROCESS_VM_READ only. No game writes,
 injection, debugger attachment, privilege changes, network, or persistence.
@@ -14,7 +14,7 @@ import struct
 import time
 import traceback
 
-EXPECTED = ''  # Set by loot_app through configure_runtime after installation discovery.
+EXPECTED = r"D:\steam\steamapps\common\Ruins of Dawn\RuinsOfDawn\Binaries\Win64\RuinsOfDawn-Win64-Shipping.exe"
 OUTPUT_ROOT = pathlib.Path(__file__).resolve().parent
 
 

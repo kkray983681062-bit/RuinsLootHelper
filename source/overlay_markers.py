@@ -70,6 +70,23 @@ class MarkerLayer:
         self.last_key = None
         self.slots = []
         self.reason = '已关闭'
+        self.anchor = None
+
+    def automatic_boxes(self, game, feature, bounds):
+        if self.anchor is None:
+            from backpack_anchor import AnchorWorker
+            self.anchor = AnchorWorker()
+        sample = self.anchor.request(game, feature.get('game_pid'), feature['ui'].get('player_address'), bounds)
+        if sample:
+            boxes = native_slot_rects(sample['grid'], *bounds[2:])
+            if boxes:
+                return boxes
+            self.reason = '未识别背包位置；可在“背包定位”中点锁辅助校准'
+        else:
+            self.reason = '正在自动识别背包顶部的锁'
+        if self.anchor.error:
+            self.reason = '自动定位暂不可用：' + self.anchor.error
+        return None
 
     def hide(self, reason='未显示'):
         u.ShowWindow(self.hwnd, 0)
@@ -81,24 +98,28 @@ class MarkerLayer:
         self.reason = reason
 
     def update(self, game, config, sections, live, feature):
+        if not hasattr(self, 'anchor'):
+            self.anchor = None
         if not config.get('enabled', False):
+            if self.anchor: self.anchor.suspend()
             return self.hide('已关闭')
         if not live or feature.get('status') != 'running' or not fresh(feature.get('heartbeat_utc')) or not feature.get('ui', {}).get('valid'):
+            if self.anchor: self.anchor.suspend()
             return self.hide('等待读取')
         if not feature['ui'].get('backpack_open') or not foreground_matches(game, feature.get('game_pid')):
+            if self.anchor: self.anchor.suspend()
             return self.hide('背包未打开或游戏不在前台')
         bounds = game_bounds(game)
         if not bounds:
             return self.hide('等待游戏窗口')
-        native = feature.get('native', {})
-        grid = native.get('grid')
         boxes = None
         automatic = config.get('automatic', False)
-        if (automatic and native.get('game_pid') == feature.get('game_pid')
-                and native.get('player_address') == feature.get('ui', {}).get('player_address')
-                and isinstance(native.get('utc'), (int, float))
-                and 0 <= time.time() - native['utc'] < 1.5):
-            boxes = native_slot_rects(grid, *bounds[2:])
+        if automatic:
+            boxes = self.automatic_boxes(game, feature, bounds)
+            if boxes is None:
+                return self.hide(self.reason)
+        elif self.anchor:
+            self.anchor.suspend()
         calibrated = boxes is None
         if calibrated:
             if not slot_rect(0, config.get('grid'), *bounds[2:]):
@@ -130,6 +151,8 @@ class MarkerLayer:
         self.reason = '已标记（使用校准位置）' if calibrated else '已标记'
 
     def close(self):
+        if self.anchor:
+            self.anchor.close()
         self.hide()
         self.window.destroy()
 
@@ -137,6 +160,7 @@ class MarkerLayer:
 class GridCalibration:
     def __init__(self, overlay, settings_window, finished):
         self.overlay, self.settings_window, self.finished = overlay, settings_window, finished
+        self.closed = True
         self.bounds = game_bounds(overlay.game)
         if not self.bounds:
             finished(None)
@@ -209,3 +233,27 @@ class GridCalibration:
             self.settings_window.deiconify()
             self.settings_window.lift()
         self.finished(grid)
+
+
+class LockCalibration(GridCalibration):
+    def __init__(self, overlay, settings_window, finished):
+        super().__init__(overlay, settings_window, finished)
+        if not self.closed:
+            self.canvas.delete('all')
+            self.canvas.create_text(self.bounds[2]//2, 45, text='点一下背包顶部的橙色锁；Esc 取消',
+                                    fill='white', font=('Microsoft YaHei UI', 18, 'bold'))
+
+    def poll(self):
+        self.job = None
+        if self.closed:
+            return
+        if u.GetAsyncKeyState(27) & 0x8000 or not u.IsWindow(self.overlay.game) or u.IsIconic(self.overlay.game):
+            self.finish(None)
+            return
+        sx, sy, down, target = read_pointer()
+        if down and not self.was_down and u.GetAncestor(target, 2) == self.hwnd:
+            x, y, width, height = self.bounds
+            self.finish([(sx-x)/width, (sy-y)/height])
+            return
+        self.was_down = down
+        self.job = self.window.after(16, self.poll)

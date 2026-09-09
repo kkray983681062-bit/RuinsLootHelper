@@ -6,15 +6,16 @@
 cd source
 ```
 
-本次只整理已公开的源码快照，源码版本字段仍为 `0.3.0`；当前 `0.3.4` 完整发行包见 [Releases](https://github.com/kkray983681062-bit/RuinsLootHelper/releases/latest)，两者不要混为同一构建。
+本次源码与 `0.3.5` 发行版同步。
 
 ## 环境
 
 Windows 10/11 x64，Python 3.11 x64，安装 Python 时包含 Tcl/Tk。程序通过 Win32 API 和 Steam 安装记录工作，不支持在 Linux/macOS 上运行桌面功能。
 
-源码启动只依赖 Python 标准库：
+源码启动前需安装 `requirements.txt` 中的图像定位依赖：
 
 ```powershell
+py -3.11 -m pip install -r requirements.txt
 py -3.11 -B loot_app.py
 ```
 
@@ -34,7 +35,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -B packaging/build_release.py
 ```
 
-构建使用 PyInstaller 的 onedir 模式。此源码快照的完整产物在 `source/releases/<版本>/`；包含 EXE、`_internal`、说明、诊断 BAT 以及第三方许可。旧快照的组件安装仍需下载运行库；已发布的 0.3.4 完整包则内置组件，支持离线安装。
+构建使用 PyInstaller 的 onedir 模式。此源码快照的完整产物在 `source/releases/<版本>/`；包含 EXE、`_internal`、说明、诊断 BAT 以及第三方许可。构建前需将已校验的 `UE4SS-2bfa839f.zip` 放入 `source/runtime/`；下载 URL 与 SHA-256 在 `native_support.py`。二进制包内置该组件，支持离线安装。
 
 版本字段位于 `loot_app.py`、`packaging/build_release.py` 和 `packaging/version.txt`；发布前同步更新。不要把当前最新源码自动等同于同号旧发行包。
 

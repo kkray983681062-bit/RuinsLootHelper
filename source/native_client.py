@@ -60,6 +60,9 @@ class NativeClient:
         self.awaiting = {}
         self.lock_notices = AutoLockNotices()
         self.recycle_key, self.recycle_command = None, None
+        # This token and decision belong to the helper process, not a character.
+        self.rift_run_id = uuid.uuid4().hex
+        self.rift_permission = None
 
     def update(self, snapshot, schema, native):
         from loot_overlay import find_game
@@ -74,6 +77,8 @@ class NativeClient:
         saved_exclusions = snapshot.settings.get('pickup_exclusions', [])
         excluded = {key: True for key in saved_exclusions if isinstance(key, str)} if isinstance(saved_exclusions, list) else {}
         selected_codex = codex_selection(snapshot.settings)
+        if not snapshot.settings.get('drop_filter_enabled', True):
+            excluded, selected_codex = {}, set()
         pickup_key = (options, excluded, selected_codex)
         if self.last_pickup != pickup_key:
             self.pickup_revision += 1
@@ -97,7 +102,6 @@ class NativeClient:
             self.lock_notices = AutoLockNotices()
             self.recycle_key, self.recycle_command = None, None
         usable = snapshot.live and ui.get('valid', False) and isinstance(schema, dict) and schema.get('pid') == pid
-        markers = snapshot.settings.get('backpack_markers', {})
         request = {'protocol': PROTOCOL, 'session': self.session, 'game_pid': pid or 0,
             'expires': time.time() + 1, 'monotonic': now, 'player_address': player,
             'active': active and bool(usable), 'pickup': bool(config.get('pickup', False) and usable),
@@ -109,16 +113,29 @@ class NativeClient:
             'codex_names': {name: True for name in sorted(selected_codex)},
             'skip_unknown_codex': bool(codex_names() <= selected_codex),
             'borderless': bool(config.get('borderless', False) and usable),
-            'markers': bool(markers.get('enabled') and markers.get('automatic', True) and usable),
+            # The helper locates the header lock on screen. Stop native Tick
+            # collection so automatic circles do not depend on a game restart.
+            'markers': False,
             'viewport': list(bounds[2:]) if bounds else None, 'schema': schema if usable else None, 'locks': [],
             'auto_lock': bool(config.get('lock') and usable),
             'auto_recycle': bool(config.get('auto_recycle', False) and config.get('lock') and usable),
+            'auto_rift': bool(config.get('auto_rift', False) and usable),
+            'bagua_marker': bool(config.get('bagua_marker', False) and usable),
+            'rift_run_id': self.rift_run_id,
+            'rift_permission': self.rift_permission,
             'recycle': None}
         self.policy.observe(snapshot.current.get('items', []) if usable else [], now)
         selected = config.get('lock_sections', {'numeric': True, 'legendary': False, 'lower': False})
         indices = {entry['index'] for key, entries in snapshot.sections.items() if selected.get(key, False) for entry in entries}
         ready = (fresh_status(native) and native.get('protocol') == PROTOCOL and native.get('ready') and native.get('session') == self.session
                  and native.get('player_address') == player and native.get('game_pid') == pid)
+        if ready and self.rift_permission is None:
+            rift = native.get('rift')
+            if (isinstance(rift, dict) and rift.get('run_id') == self.rift_run_id
+                    and rift.get('checked') is True and isinstance(rift.get('eligible'), bool)):
+                self.rift_permission = {key: rift.get(key) for key in
+                    ('run_id', 'checked', 'eligible', 'level', 'extra_drop_pct', 'extra_elite_pct')}
+                request['rift_permission'] = self.rift_permission
         acks = {ack['id']: ack.get('result') for ack in (native.get('acks', []) or [])
                 if isinstance(ack, dict) and isinstance(ack.get('id'), str)} if ready else {}
         if usable:

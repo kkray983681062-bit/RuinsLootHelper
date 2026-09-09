@@ -1,4 +1,4 @@
-"""Native feature controls; installer work and status polling stay off Tk."""
+"""Advanced feature cards. File/network work remains outside Tk callbacks."""
 from pathlib import Path
 import queue
 import threading
@@ -6,104 +6,171 @@ import tkinter as tk
 from native_client import fresh_status, PROTOCOL
 from overlay_scroll import AutoScrollbar
 from pickup_library import pickup_options, RANGE_OPTIONS, INTERVAL_OPTIONS, BATCH_OPTIONS
+from ui_theme import BG, PANEL, FG, MUTED, GOLD, LINE, GREEN, label
+from ui_switch import Switch
 
 
 class NativeSettings:
     def __init__(self, dialog):
         self.dialog = dialog
-        self.tab = tk.Frame(dialog.features, bg='#111a24')
-        dialog.features.add(self.tab, text='原生功能')
-        self.canvas = tk.Canvas(self.tab, bg='#111a24', highlightthickness=0, yscrollincrement=16)
+        self.tab = tk.Frame(dialog.features, bg=BG)
+        dialog.features.add(self.tab, text='进阶辅助')
+        self.canvas = tk.Canvas(self.tab, bg=BG, highlightthickness=0, yscrollincrement=20)
         self.scrollbar = AutoScrollbar(self.tab, self.canvas)
         self.canvas.pack(side='left', fill='both', expand=True)
-        body = tk.Frame(self.canvas, bg='#111a24')
-        body_id = self.canvas.create_window((0, 0), window=body, anchor='nw')
-        body.bind('<Configure>', lambda _: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
-        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(body_id, width=e.width))
+        self.body = tk.Frame(self.canvas, bg=BG)
+        body_id = self.canvas.create_window((0, 0), window=self.body, anchor='nw')
+        self.body.bind('<Configure>', lambda _: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', lambda e: self.resize(e, body_id))
         settings = dialog.settings.get('native', {})
-        self.pickup = tk.BooleanVar(value=settings.get('pickup', False))
         options = pickup_options(settings)
+        self.pickup = tk.BooleanVar(value=settings.get('pickup', False))
         self.range_choice = tk.DoubleVar(value=options['pickup_range_multiplier'])
         self.interval_choice = tk.DoubleVar(value=options['pickup_interval'])
         self.batch_choice = tk.IntVar(value=options['pickup_batch'])
         self.lock = tk.BooleanVar(value=settings.get('lock', False))
         self.auto_recycle = tk.BooleanVar(value=bool(settings.get('auto_recycle', False) and self.lock.get()))
+        self.auto_rift = tk.BooleanVar(value=bool(settings.get('auto_rift', False)))
+        self.bagua = tk.BooleanVar(value=bool(settings.get('bagua_marker', False)))
+        self.drop_enabled = tk.BooleanVar(value=dialog.settings.get('drop_filter_enabled', True))
         self.borderless = tk.BooleanVar(value=settings.get('borderless', False))
         self.sections = {key: tk.BooleanVar(value=settings.get('lock_sections', {}).get(key, key == 'numeric'))
                          for key in ('numeric', 'legendary', 'lower')}
         self.messages = queue.Queue()
-        self.job = None
-        d = dialog
-        setup = tk.Frame(body, bg='#1e2b37')
-        setup.pack(fill='x', padx=16, pady=(14, 8))
-        tk.Label(setup, text='首次使用，请先安装游戏组件', bg='#1e2b37', fg='#ffda7c',
-                 font=('Microsoft YaHei UI', 11, 'bold'), anchor='w').pack(fill='x', padx=14, pady=(12, 6))
-        tk.Label(setup, text='安装组件 → 重启游戏 → 开启需要的功能', bg='#1e2b37', fg='#e3e8ee',
-                 anchor='w').pack(fill='x', padx=14, pady=(0, 4))
-        tk.Label(setup, text='自动拾取、自动锁定和背包自动定位均需要组件；原生功能仍为测试版。',
-                 bg='#1e2b37', fg='#a4b6c7', anchor='w', justify='left', wraplength=540).pack(fill='x', padx=14, pady=(0, 9))
-        self.install_button = d.button(setup, '安装／更新游戏组件（首次约 9 MB）', self.install, gold=True)
-        self.install_button.pack(anchor='w', padx=14, pady=(0, 12))
-        self.status = d.label(body, '正在检查连接', anchor='w', justify='left', wraplength=540)
-        self.status.pack(fill='x', padx=16, pady=(5, 14))
-        d.check(body, '自动拾取附近掉落（游戏原生流程）', self.pickup).pack(anchor='w', padx=12, pady=6)
+        self.job, self.last_message, self.mode = None, None, None
+        self.cards, self.wrap_labels = [], []
+        label(self.body, '进阶辅助', size=20, bold=True).pack(anchor='w', pady=(6, 6))
+        label(self.body, '如果你还在第一次探索，建议先保留亲手尝试的乐趣。\n这里的便利，可以晚一点再用。',
+              color=MUTED, justify='left').pack(anchor='w')
+        dialog.button(self.body, '阅读作者的话 →', lambda: dialog.features.select(dialog.author_tab)).pack(anchor='w', pady=(6, 12))
+        setup = tk.Frame(self.body, bg=PANEL)
+        setup.pack(fill='x', pady=(0, 16))
+        self.status = label(setup, '游戏组件 · 正在检查连接', color=MUTED)
+        self.status.pack(side='left', padx=12, pady=12)
+        self.install_button = dialog.button(setup, '安装 / 更新组件', self.install)
+        self.install_button.pack(side='right', padx=6, pady=6)
+        self.card_grid = tk.Frame(self.body, bg=BG)
+        self.card_grid.pack(fill='x')
+        self.card_grid.columnconfigure(0, weight=1, uniform='cards')
+        self.card_grid.columnconfigure(1, weight=1, uniform='cards')
+        self.pickup_card, self.pickup_check = self.card('自动拾取', '调用游戏拾取流程，收取附近掉落。', self.pickup)
+        self.pickup_status = self.text(self.pickup_card, '已关闭', GREEN)
+        detail = self.details(self.pickup_card)
         self.radio_groups = []
         for title, variable, choices, suffix in (
             ('拾取范围', self.range_choice, RANGE_OPTIONS, ' 倍'),
-            ('检查 / 拾取间隔', self.interval_choice, INTERVAL_OPTIONS, ' 秒'),
-            ('拾取批量', self.batch_choice, BATCH_OPTIONS, ' 件')):
-            row = tk.Frame(body, bg='#111a24')
-            row.pack(fill='x', padx=24, pady=4)
-            d.label(row, title, width=15, anchor='w').pack(side='left')
+            ('拾取间隔', self.interval_choice, INTERVAL_OPTIONS, ' 秒'),
+            ('每批最多尝试', self.batch_choice, [x for x in BATCH_OPTIONS if x], ' 件')):
+            self.text(detail, title)
+            row = tk.Frame(detail, bg=PANEL); row.pack(fill='x')
             group = []
             for value in choices:
-                label = (f'{value:.1f}' if variable is self.range_choice else f'{value:g}') + suffix
-                if variable is self.batch_choice and value == 0:
-                    label = '自动'
-                button = tk.Radiobutton(row, text=label, variable=variable, value=value,
-                    bg='#111a24', fg='#e6d4a2', selectcolor='#263541', activebackground='#263541',
-                    activeforeground='#ffe08a', highlightthickness=0, takefocus=True)
-                button.pack(side='left', padx=(0, 8))
-                group.append(button)
+                text = (f'{value:.1f}' if variable is self.range_choice else f'{value:g}') + suffix
+                rb = tk.Radiobutton(row, text=text, variable=variable, value=value, bg=PANEL,
+                                    fg=FG, selectcolor=BG, activebackground=PANEL,
+                                    activeforeground=GOLD, highlightthickness=0)
+                rb.pack(side='left', padx=(0, 5)); group.append(rb)
             self.radio_groups.append(group)
-        self.codex_summary = d.label(body, '图鉴屏蔽：与排除库同步', anchor='w')
-        self.codex_summary.pack(fill='x', padx=28, pady=4)
-        d.button(body, '选择屏蔽的图鉴 / 装备', self.open_exclusions).pack(anchor='w', padx=28, pady=4)
-        d.label(body, '自动批量：按耗时分批连续清理范围内可拾取物品。\n切出游戏、打开菜单或背包时暂停；背包满了静默暂停，有空位后恢复。\n排除库接入官方新掉落屏蔽；地上原有物品只跳过助手拾取。',
-                justify='left', anchor='w', wraplength=520).pack(fill='x', padx=18, pady=(0, 10))
-        d.check(body, '自动锁定符合筛选的装备', self.lock).pack(anchor='w', padx=12, pady=6)
-        row = tk.Frame(body, bg='#111a24')
-        row.pack(fill='x', padx=18)
+        # Legacy automatic batches remain readable; new choices have explicit limits.
+        if self.batch_choice.get() == 0:
+            self.batch_choice.set(4)
+        self.text(detail, '切出游戏、打开菜单或背包时暂停。背包满了静默暂停，有空位再恢复。')
+        self.drop_card, self.drop_check = self.card('掉落屏蔽清单', '选择不想掉落的装备和图鉴。', self.drop_enabled)
+        self.codex_summary = self.text(self.drop_card, '与装备、图鉴清单同步', GREEN)
+        dialog.button(self.drop_card, '设置清单 →', self.open_exclusions).pack(anchor='w', padx=14, pady=(4, 14))
+        self.lock_card, self.lock_check = self.card('自动锁定', '先保护达到筛选条件的装备。', self.lock)
+        self.recycle_card = self.lock_card
+        self.lock_status = self.text(self.lock_card, '已关闭', GREEN)
+        lock_details = self.details(self.lock_card)
         for key, title in (('numeric', '词条'), ('legendary', '上技能'), ('lower', '下技能')):
-            d.check(row, title, self.sections[key]).pack(side='left', padx=(0, 18))
-        d.label(body, '自动锁定成功后，词条保留显示 10 秒；未自动锁定的照常显示。\n手动解锁后静默 30 秒；装备换格后继续跟随。\n属性完全相同的多件装备会一起暂缓，避免误锁。',
-                justify='left', anchor='w').pack(fill='x', padx=18, pady=8)
-        self.recycle_check = d.check(body, '背包剩 1 格或已满时，自动无视条件全部回收', self.auto_recycle)
-        self.recycle_check.configure(disabledforeground='#63717e')
-        self.recycle_check.pack(anchor='w', padx=12, pady=(6, 2))
-        d.label(body, '默认关闭；需先开启自动锁定。确认符合筛选的装备已锁定后，\n调用官方回收，沿用游戏中的金币／经验选择。手动解锁后 30 秒内暂缓回收。',
-                justify='left', anchor='w', wraplength=520).pack(fill='x', padx=18, pady=(2, 10))
+            dialog.check(lock_details, title, self.sections[key]).pack(side='top', anchor='w')
+        self.text(lock_details, '手动解锁后静默 30 秒；装备换格后继续跟随。相同属性的装备会一起暂缓。')
+        tk.Frame(self.lock_card, bg=LINE, height=1).pack(fill='x', padx=14, pady=(12, 8))
+        self.text(self.lock_card, '先锁定达标装备，再回收', GOLD)
+        recycle_head = tk.Frame(self.lock_card, bg=PANEL)
+        recycle_head.pack(fill='x', padx=14, pady=(8, 0))
+        label(recycle_head, '自动回收', size=12, bold=True).pack(side='left')
+        self.recycle_check = Switch(recycle_head, self.auto_recycle)
+        self.recycle_check.pack(side='right')
+        self.text(self.lock_card, '需先开启自动锁定。确认达标装备已锁定后，再按游戏设置回收。')
+        self.recycle_status = self.text(self.lock_card, '已关闭', GREEN)
+        recycle_details = self.details(self.lock_card)
+        self.text(recycle_details, '背包剩 1 格或已满时，回收所有未锁定物品；沿用游戏的金币 / 经验选择。手动解锁后 30 秒内暂缓。')
+        self.rift_card, self.rift_check = self.card('自动开门', '自动开启附近的空间裂隙。', self.auto_rift)
+        self.rift_status = self.text(self.rift_card, '等待进入角色后检查使用条件', GREEN)
+        self.rift_details = self.details(self.rift_card, '使用条件')
+        self.text(self.rift_details, '满足其一：等级 ≥ 50；或额外掉落率与额外极品率均 ≥ 300%。每次助手启动检查一次，通过后切换角色仍可使用。')
+        self.bagua_card, self.bagua_check = self.card('八卦入口提示', '在封印之地的小地图上标出正确入口。', self.bagua)
+        self.bagua_status = self.text(self.bagua_card, '已关闭', GREEN)
+        detail = self.details(self.bagua_card)
+        self.text(detail, '进入八卦触发区域后显示红点，离开后隐藏。只显示入口位置，不改变传送规则。地图放大时隐藏；加入他人房间时可能读不到入口。')
+        self.footer = tk.Frame(self.body, bg=BG)
+        self.footer.pack(fill='x', pady=(12, 4))
+        self.borderless_check = dialog.check(self.footer, '全屏兼容：切换为无边框全屏', self.borderless)
+        self.borderless_check.pack(anchor='w')
+        label(self.footer, '这些功能需要游戏组件；装备筛选可以独立使用。', color=MUTED).pack(anchor='w', pady=8)
         self.lock_trace = self.lock.trace_add('write', self.update_recycle_available)
         self.update_recycle_available()
-        d.label(body, '连接失败时以上功能保持暂停，筛选和普通悬浮窗仍可使用。', anchor='w', wraplength=520).pack(fill='x', padx=18, pady=8)
-        self.borderless_check = d.check(body, '全屏兼容：将独占全屏切换为无边框全屏', self.borderless)
-        self.borderless_check.pack(anchor='w', padx=12, pady=(6, 14))
-        self.last_message = None
-        self.job = d.window.after(200, self.refresh)
+        self.job = dialog.window.after(200, self.refresh)
         self.tab.bind('<Destroy>', self.cleanup)
 
+    def card(self, title, description, variable):
+        frame = tk.Frame(self.card_grid, bg=PANEL)
+        head = tk.Frame(frame, bg=PANEL)
+        head.pack(fill='x', padx=14, pady=(14, 4))
+        label(head, title, size=12, bold=True).pack(side='left')
+        control = Switch(head, variable); control.pack(side='right')
+        self.text(frame, description)
+        self.cards.append(frame)
+        return frame, control
+
+    def text(self, parent, text, color=MUTED):
+        widget = label(parent, text, color=color, wraplength=300, justify='left')
+        widget.pack(fill='x', padx=14, pady=(4, 8))
+        self.wrap_labels.append(widget)
+        return widget
+
+    def details(self, card, title='设置'):
+        frame = tk.Frame(card, bg=PANEL)
+        def toggle():
+            if frame.winfo_manager():
+                frame.pack_forget(); action.configure(text=title + ' ▾')
+            else:
+                frame.pack(fill='x', padx=0, pady=(0, 12), after=action)
+                action.configure(text=title + ' ▴')
+        action = self.dialog.button(card, title + ' ▾', toggle)
+        action.pack(anchor='w', padx=0, pady=(0, 6))
+        return frame
+
+    def resize(self, event, body_id):
+        self.canvas.itemconfigure(body_id, width=event.width)
+        if len(self.cards) < 5:
+            return
+        mode = event.width >= 650
+        if mode != self.mode:
+            self.mode = mode
+            for card in self.cards:
+                card.grid_forget()
+            if mode:
+                for card, row, col, span in ((self.pickup_card,0,0,1),(self.drop_card,1,0,1),
+                         (self.lock_card,0,1,2),(self.rift_card,2,0,1),(self.bagua_card,2,1,1)):
+                    card.grid(row=row, column=col, rowspan=span, sticky='nsew', padx=(0,12) if col==0 else 0, pady=(0,12))
+            else:
+                for row, card in enumerate((self.pickup_card,self.drop_card,self.lock_card,self.rift_card,self.bagua_card)):
+                    card.grid(row=row, column=0, columnspan=2, sticky='nsew', pady=(0,12))
+        width = max(230, (event.width-12)//2-28 if mode else event.width-28)
+        for widget in self.wrap_labels:
+            widget.configure(wraplength=width)
+
     def open_exclusions(self):
-        library = self.dialog.pickup_library
-        library.category.set('图鉴')
-        library.query.set('')
-        library.redraw()
-        self.dialog.features.select(library.tab)
+        self.dialog.features.select(self.dialog.pickup_library.tab)
 
     def update_recycle_available(self, *_):
         enabled = self.lock.get()
         if not enabled:
             self.auto_recycle.set(False)
         self.recycle_check.configure(state='normal' if enabled else 'disabled')
+        self.recycle_status.configure(text='已关闭' if enabled else '需先开启自动锁定')
 
     def install(self):
         import loot_overlay
@@ -117,7 +184,7 @@ class NativeSettings:
                 self.last_message = '尚未定位游戏，启动助手后再安装。'
                 return
         self.install_button.configure(state='disabled')
-        self.last_message = '正在准备原生组件……'
+        self.last_message = '正在校验并安装本地组件……'
         game, directory = saved.get('game_exe'), loot_overlay.BASE
         messages = self.messages
         def work():
@@ -136,57 +203,81 @@ class NativeSettings:
         except queue.Empty:
             pass
         state = self.dialog.overlay.read_file('native-status.json', {}) or {}
+        connected = fresh_status(state) and state.get('protocol') == PROTOCOL and state.get('ready')
+        self.update_rift_available(state)
         if fresh_status(state) and state.get('protocol') != PROTOCOL:
-            text = '原生组件版本不匹配，请更新组件并重启游戏。'
-        elif fresh_status(state) and state.get('ready'):
-            text = '原生组件已连接'
-            code = state.get('pickup_state')
-            text += {'full': ' · 拾取暂停（背包满）', 'inactive': ' · 拾取暂停（已切出游戏）',
-                     'menu': ' · 拾取暂停（菜单或背包打开）', 'requested': ' · 正在拾取',
-                     'waiting_for_loot': ' · 等待附近掉落', 'off': ' · 自动拾取已关闭',
-                     'waiting_for_result': ' · 等待游戏确认拾取'}.get(code, '')
-            skipped = state.get('exclusions', {}) or {}
-            gear, codex = skipped.get('equipment', 0), skipped.get('codex', 0)
-            if gear or codex:
-                text += f'\n本轮按排除库跳过：装备 {gear} 件，图鉴 {codex} 件'
-            blocked = state.get('drop_filter', {}) or {}
-            if blocked.get('state') == 'connected':
-                text += f'\n新掉落屏蔽已连接 · 已拦截 {blocked.get("blocked", 0)} 次'
-            elif blocked.get('state') == 'error':
-                text += '\n新掉落屏蔽未生效：' + str(blocked.get('error', '接口不兼容'))[:120]
-            elif blocked.get('state') == 'waiting_for_function':
-                text += '\n新掉落屏蔽：等待游戏接口'
-            recycle = state.get('recycle_state')
-            if self.auto_recycle.get():
-                if not state.get('auto_recycle_supported'):
-                    text += '\n自动回收：更新组件并重启游戏后可用'
-                else:
-                    text += {'requested': '\n已调用官方全部回收',
-                             'unlock_grace': '\n自动回收暂缓：手动解锁静默中',
-                             'waiting_for_locks': '\n自动回收：等待装备锁定',
-                             'inventory_changed': '\n自动回收：背包已变化，重新检查',
-                             'error': '\n自动回收未执行，等待检查组件'}.get(recycle, '')
-        elif fresh_status(state) and state.get('error'):
-            text = '原生连接暂不可用：' + str(state['error'])[:180]
+            status = '组件需更新 · 更新后重启游戏'
+        elif connected:
+            status = '● 游戏组件已连接'
         else:
-            text = self.last_message or '未连接；安装组件后需要重新启动游戏。'
-        self.status.configure(text=text)
+            status = self.last_message or '○ 游戏组件未连接'
+        self.status.configure(text=status, fg=GREEN if connected else MUTED)
+        code = state.get('pickup_state')
+        pickup = {'full':'背包已满，已暂停','inactive':'切出游戏，已暂停','menu':'菜单或背包打开，已暂停',
+                  'requested':'正在拾取','waiting_for_loot':'等待附近掉落','waiting_for_result':'等待游戏确认',
+                  'recycling':'回收中，稍后继续'}.get(code, '等待附近掉落')
+        self.pickup_status.configure(text='已关闭' if not self.pickup.get() else pickup if connected else '等待游戏组件连接')
+        self.lock_status.configure(text='已关闭' if not self.lock.get() else '正在保护达标装备' if connected else '等待游戏组件连接')
+        recycle = {'requested':'已调用游戏回收','unlock_grace':'手动解锁静默中','waiting_for_locks':'等待达标装备锁定',
+                   'inventory_changed':'背包变化，重新检查','error':'暂不可用，请检查组件'}.get(state.get('recycle_state'), '等待背包剩余 1 格')
+        self.recycle_status.configure(text='需先开启自动锁定' if not self.lock.get() else '已关闭' if not self.auto_recycle.get()
+                                      else recycle if connected else '等待游戏组件连接')
+        bagua = state.get('bagua', {}) or {}
+        self.bagua_status.configure(text='已关闭' if not self.bagua.get() else '等待游戏组件连接' if not connected else
+            '更新组件后可用' if not state.get('bagua_supported') else
+            {'shown':'正确入口已标记','waiting':'等待进入八卦区域','inactive':'切出游戏，已暂停',
+             'error':'入口暂不可用','stopped':'入口提示已暂停，请重新开关'}.get(bagua.get('state'), '等待进入八卦区域'))
+        library = self.dialog.pickup_library.model
+        selected = len(library.equipment_values()) + len(library.codex_values())
+        self.codex_summary.configure(text='已关闭，清单已保留' if not self.drop_enabled.get() else
+                                    f'已选择 {selected} 种物品' + (' · 已连接' if connected else ' · 等待组件'))
+        status = self.dialog.overlay.read_file('continuous-status.json', {}) or {}
+        self.dialog.game_status.configure(text='● 游戏已连接' if status.get('status') == 'watching' else '○ 等待游戏连接')
         self.job = self.dialog.window.after(500, self.refresh)
 
+    def update_rift_available(self, state):
+        connected = fresh_status(state) and state.get('protocol') == PROTOCOL and state.get('ready')
+        rift = state.get('rift', {}) if isinstance(state.get('rift'), dict) else {}
+        available = bool(connected and state.get('rift_supported') and rift.get('eligible') is True)
+        self.rift_check.configure(state='normal' if available else 'disabled')
+        if not connected:
+            text = '等待进入角色后检查使用条件'
+        elif not state.get('rift_supported'):
+            text = '更新游戏组件并重启游戏后可用'
+        elif available:
+            text = '本次已解锁，切换角色仍可使用'
+            if self.auto_rift.get():
+                text += {'requested': ' · 已发出开门指令', 'watching': ' · 正在检测附近裂隙',
+                         'menu': ' · 菜单打开，暂缓开门', 'error': ' · 开门调用失败'}.get(rift.get('state'), '')
+        elif rift.get('checked'):
+            if self.auto_rift.get():
+                self.auto_rift.set(False)
+            text = '未满足使用条件。换达标角色后重开助手可重新检测'
+        else:
+            text = '等待角色属性就绪后检测资格'
+        if rift.get('checked'):
+            def shown(value, suffix=''):
+                return f'{value:g}{suffix}' if isinstance(value, (int, float)) and not isinstance(value, bool) else '未读取'
+            text += ('\n首次检测：等级 ' + shown(rift.get('level')) +
+                     ' · 额外掉落率 ' + shown(rift.get('extra_drop_pct'), '%') +
+                     ' · 额外极品率 ' + shown(rift.get('extra_elite_pct'), '%'))
+        self.rift_status.configure(text=text)
+
     def cleanup(self, event):
-        if event.widget == self.tab and self.lock_trace:
+        if event.widget != self.tab:
+            return
+        if self.lock_trace:
             self.lock.trace_remove('write', self.lock_trace)
             self.lock_trace = None
-        if event.widget == self.tab and self.job:
+        if self.job:
             self.dialog.window.after_cancel(self.job)
             self.job = None
 
     def values(self):
-        return {'native': {'pickup': self.pickup.get(), 'lock': self.lock.get(),
-                           'auto_recycle': bool(self.auto_recycle.get() and self.lock.get()),
-                           'pickup_range_multiplier': self.range_choice.get(),
-                           'pickup_interval': self.interval_choice.get(),
-                           'pickup_batch': self.batch_choice.get(),
-                           'skip_codex': bool(self.dialog.pickup_library.model.codex_values()),
-                           'borderless': self.borderless.get(),
-                           'lock_sections': {key: value.get() for key, value in self.sections.items()}}}
+        values = dict(self.dialog.settings.get('native', {}))
+        values.update(pickup=self.pickup.get(), lock=self.lock.get(), auto_rift=self.auto_rift.get(),
+                      bagua_marker=self.bagua.get(), auto_recycle=bool(self.auto_recycle.get() and self.lock.get()),
+                      pickup_range_multiplier=self.range_choice.get(), pickup_interval=self.interval_choice.get(),
+                      pickup_batch=self.batch_choice.get(), skip_codex=bool(self.dialog.pickup_library.model.codex_values()),
+                      borderless=self.borderless.get(), lock_sections={key: var.get() for key,var in self.sections.items()})
+        return {'native': values, 'drop_filter_enabled': self.drop_enabled.get()}

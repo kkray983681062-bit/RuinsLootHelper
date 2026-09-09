@@ -6,84 +6,147 @@ from gear_view import catalog_data, configured_rules, LEGENDARY_TYPES
 from overlay_scroll import dark_scrollbars, AutoScrollbar
 from tk_lifecycle import guard_tk
 
-BG = '#111a24'
-PANEL = '#1e2b37'
-FG = '#e3e8ee'
-GOLD = '#ffda7c'
-MUTED = '#a4b6c7'
-
+from ui_theme import BG, PANEL, FG, GOLD, MUTED, setup, center_window, button as themed_button
+from ui_pages import PageStack
 
 class Settings:
     def __init__(self, overlay, show=True):
         guard_tk(overlay.root)
         self.overlay = overlay
         self.catalog = catalog_data()
-        self.load, self.write = overlay.read_file, overlay.write_file
+        self.write = overlay.write_file
+        def load_settings(name, default=None):
+            value = overlay.read_file(name, None)
+            # Startup can beat the first asynchronous file read. Never replace
+            # existing preferences with defaults merely because the feed is cold.
+            if value is None and hasattr(overlay, 'feed'):
+                from loot_overlay import load
+                value = load(name)
+            return default if value is None else value
+        self.load = load_settings
         self.rules = configured_rules(self.load('loot-filter-rules.json', None))
         self.settings = self.load('loot-overlay-settings.json', {})
         self.window = tk.Toplevel(overlay.root)
         self.window.withdraw()
-        self.window.title('功能设置')
+        self.window.title('破晓装备助手 · 功能设置')
         self.window.attributes('-topmost', True)
         self.window.configure(bg=BG)
-        self.window.geometry('720x610')
-        self.window.minsize(590, 460)
+        self.window.geometry('1060x760')
+        self.window.minsize(720, 520)
         self.window.protocol('WM_DELETE_WINDOW', self.cancel)
-        style = ttk.Style(self.window)
-        if style.theme_use() != 'clam':
-            style.theme_use('clam')
+        setup(self.window)
         dark_scrollbars(self.window)
-        style.configure('Loot.TNotebook', background=BG, borderwidth=0)
-        style.configure('Loot.TNotebook.Tab', background=PANEL, foreground=MUTED, padding=(16, 9))
-        style.map('Loot.TNotebook.Tab', background=[('selected', '#354450')], foreground=[('selected', GOLD)])
-        self.features = ttk.Notebook(self.window, style='Loot.TNotebook')
-        self.features.pack(fill='both', expand=True, padx=12, pady=(12, 6))
+        from ui_theme import label
+        header = tk.Frame(self.window, bg=BG)
+        header.pack(fill='x', padx=24, pady=(20, 8))
+        label(header, '破晓装备助手', size=19, bold=True).pack(side='left')
+        label(header, '免费 · 开源', color=GOLD, size=9).pack(side='left', padx=14)
+        from loot_app import VERSION
+        label(header, 'v' + VERSION, color=MUTED, size=9).pack(side='right')
+        connection = tk.Frame(self.window, bg=BG)
+        connection.pack(fill='x', padx=24, pady=(0, 16))
+        status = self.load('continuous-status.json', {}) or {}
+        self.game_status = label(connection, '● 游戏已连接' if status.get('status') == 'watching' else '○ 等待游戏连接', color=MUTED)
+        self.game_status.pack(side='left')
+        self.button(connection, '连接详情', self.show_connection).pack(side='right')
+        self.features = PageStack(self.window, sidebar=True)
+        self.features.pack(fill='both', expand=True, padx=(0, 24))
         self.filter_page = tk.Frame(self.features, bg=BG)
-        self.features.add(self.filter_page, text='筛选设置')
-        self.tabs = ttk.Notebook(self.filter_page, style='Loot.TNotebook')
-        self.tabs.pack(fill='both', expand=True, pady=(8, 0))
+        self.features.add(self.filter_page, text='装备筛选')
+        label(self.filter_page, '装备筛选', size=20, bold=True).pack(anchor='w', pady=(6, 6))
+        label(self.filter_page, '挑出值得留下的装备，再到背包里找到它。', color=MUTED).pack(anchor='w', pady=(0, 12))
+        self.tabs = PageStack(self.filter_page)
+        self.tabs.pack(fill='both', expand=True)
         self.numeric_tab = self.tab('词条')
         self.legend_tab = self.tab('上技能')
         self.lower_tab = self.tab('下技能')
-        self.visual_tab = self.tab('悬浮显示')
         self.enabled_vars = [tk.BooleanVar(value=x['enabled']) for x in self.rules]
         self.minimum_vars = [tk.StringVar(value=f"{x['min']:g}") for x in self.rules]
         self.numeric_settings()
         self.legendary_settings()
         self.lower_settings()
-        self.visual_settings()
         from overlay_features import FeatureSettings
         self.feature_settings = FeatureSettings(self)
         from overlay_native import NativeSettings
         self.native_settings = NativeSettings(self)
+        self.visual_tab = tk.Frame(self.features, bg=BG)
+        self.features.add(self.visual_tab, text='悬浮窗')
+        label(self.visual_tab, '悬浮窗', size=20, bold=True).pack(anchor='w', pady=(6, 8))
+        self.visual_settings()
+        from author_page import populate
+        self.author_tab = tk.Frame(self.features, bg=BG)
+        self.features.add(self.author_tab, text='作者的话', separator=True)
+        self.author_scrollbar = populate(self.author_tab)
+        self.project_tab = tk.Frame(self.features, bg=BG)
+        self.features.add(self.project_tab, text='项目与更新')
+        label(self.project_tab, '项目与更新', size=20, bold=True).pack(anchor='w', pady=(6, 18))
+        self.build_project_page(VERSION)
         from overlay_pickup_library import PickupLibrarySettings
         self.pickup_library = PickupLibrarySettings(self)
         bottom = tk.Frame(self.window, bg=BG)
-        bottom.pack(side='bottom', fill='x', padx=16, pady=(4, 12), before=self.features)
-        self.notice = tk.Label(bottom, text='修改后点“应用”保存', bg=BG, fg=MUTED, anchor='w')
+        bottom.pack(side='bottom', fill='x', padx=24, pady=14, before=self.features)
+        self.notice = tk.Label(bottom, text='已保存', bg=BG, fg=MUTED, anchor='w')
         self.notice.pack(side='left')
-        self.button(bottom, '应用', self.apply, gold=True).pack(side='right', padx=(8, 0))
-        self.button(bottom, '取消', self.cancel).pack(side='right')
+        self.save_button = self.button(bottom, '保存设置', self.apply, gold=True)
+        self.save_button.pack(side='right', padx=(10, 0))
+        self.button(bottom, '关闭', self.cancel).pack(side='right')
+        self._traces = []
+        for owner in (self, self.feature_settings, self.native_settings):
+            for name, value in list(vars(owner).items()):
+                if name in ('query', 'lower_query'):
+                    continue
+                values = value.values() if isinstance(value, dict) else value if isinstance(value, list) else (value,)
+                for var in list(values):
+                    if isinstance(var, tk.Variable):
+                        token = var.trace_add('write', self.mark_dirty)
+                        self._traces.append((var, token))
         self.window.bind('<MouseWheel>', self.wheel)
-        self.center_job = self.window.after(0, self.center_on_overlay)
+        self.center_job = self.window.after(0, self.center_on_screen)
         self.window.bind('<Destroy>', self.cancel_pending_layout)
         if show:
             self.window.deiconify()
 
-    def center_on_overlay(self):
+    def mark_dirty(self, *_):
+        self.notice.configure(text='有未保存的更改', fg=GOLD)
+
+    def build_project_page(self, version):
+        from ui_theme import label
+        from update_panel import UpdatePanel
+        import loot_overlay
+        self.version = version
+        # Adapt the existing update worker to this page without creating another window.
+        self.updates = UpdatePanel(self, self.project_tab, version, loot_overlay.BASE)
+        label(self.project_tab, '蓝奏云为主要下载入口。无法检查版本时，也可以直接打开下载页。',
+              color=MUTED, wraplength=640, justify='left').pack(fill='x', pady=12)
+
+    def show_project(self):
+        self.features.select(self.project_tab)
+        self.window.deiconify()
+        self.window.lift()
+
+    def show_connection(self):
+        from ui_theme import label
+        window = tk.Toplevel(self.window)
+        window.withdraw()
+        window.title('连接详情')
+        window.configure(bg=BG)
+        window.geometry('580x260')
+        window.attributes('-topmost', True)
+        saved = self.load('app-settings.json', {}) or {}
+        label(window, '游戏位置 · 已记住', size=12, bold=True).pack(anchor='w', padx=24, pady=(24, 12))
+        label(window, str(getattr(self, 'game_exe', None) or saved.get('game_exe') or '等待定位游戏'), color=MUTED,
+              wraplength=520, justify='left').pack(fill='x', padx=24)
+        label(window, '装备筛选可以独立使用；进阶辅助需要安装游戏组件。',
+              wraplength=520, color=MUTED).pack(fill='x', padx=24, pady=16)
+        self.button(window, '关闭', window.destroy).pack(anchor='e', padx=24, pady=12)
+        window.deiconify()
+        center_window(window, self.window)
+
+    def center_on_screen(self, anchor=None):
+        if self.center_job:
+            self.window.after_cancel(self.center_job)
         self.center_job = None
-        import ctypes as c
-        from ctypes import wintypes as w
-        root = self.overlay.root
-        x = root.winfo_x() + (root.winfo_width() - 720) // 2
-        y = root.winfo_y() + (root.winfo_height() - 610) // 2
-        # Signed Tk geometry alone anchors negative coordinates to the far edge.
-        self.window.geometry(f'720x610{x:+d}{y:+d}')
-        u = c.windll.user32
-        u.GetAncestor.restype = w.HWND
-        u.SetWindowPos.argtypes = [w.HWND, w.HWND, c.c_int, c.c_int, c.c_int, c.c_int, w.UINT]
-        hwnd = u.GetAncestor(self.window.winfo_id(), 2)
-        u.SetWindowPos(hwnd, w.HWND(-1), x, y, 0, 0, 0x0011)
+        center_window(self.window, anchor if anchor is not None else self.overlay.root)
 
     def cancel_pending_layout(self, event):
         if event.widget != self.window:
@@ -91,6 +154,11 @@ class Settings:
         if self.center_job:
             self.window.after_cancel(self.center_job)
             self.center_job = None
+        if getattr(self, 'updates', None):
+            self.updates.close()
+        for var, token in self._traces:
+            var.trace_remove('write', token)
+        self._traces.clear()
         # Child pages refer back to this dialog, forming Python cycles. Release
         # Tcl variables here on the UI thread, before a file-worker GC can run.
         for owner in (self, getattr(self, 'feature_settings', None), getattr(self, 'native_settings', None),
@@ -111,15 +179,21 @@ class Settings:
         return frame
 
     def label(self, parent, text, **kwargs):
-        return tk.Label(parent, text=text, bg=BG, fg=MUTED, **kwargs)
+        color = kwargs.pop('color', MUTED)
+        size, bold = kwargs.pop('size', None), kwargs.pop('bold', False)
+        if size or bold:
+            kwargs['font'] = ('Microsoft YaHei UI', size or 10, 'bold' if bold else 'normal')
+        return tk.Label(parent, text=text, bg=parent.cget('bg'), fg=color, **kwargs)
 
-    def button(self, parent, text, command, gold=False):
-        return tk.Button(parent, text=text, command=command, bg='#d9b665' if gold else PANEL,
-                         fg=BG if gold else FG, activebackground='#41545f', relief='flat', padx=12, pady=5)
+    def button(self, parent, text, command, gold=False, primary=False):
+        return themed_button(parent, text, command, primary=gold or primary)
 
     def check(self, parent, text, variable, command=None):
-        return tk.Checkbutton(parent, text=text, variable=variable, command=command, bg=BG, fg=FG,
-                              selectcolor=PANEL, activebackground=BG, activeforeground=GOLD, anchor='w')
+        return tk.Checkbutton(parent, text=text, variable=variable, command=command,
+                              bg=parent.cget('bg'), fg=FG, selectcolor=PANEL,
+                              activebackground=parent.cget('bg'), activeforeground=GOLD,
+                              disabledforeground=MUTED, anchor='w', highlightthickness=0,
+                              cursor='hand2', padx=2, pady=4)
 
     def numeric_settings(self):
         search_bar = tk.Frame(self.numeric_tab, bg=BG)
@@ -158,7 +232,7 @@ class Settings:
         self.rows.columnconfigure(0, weight=1)
         self.query.trace_add('write', lambda *_: self.draw_rules())
         self.label(self.numeric_tab, '只筛下方数值词条；攻击、防御区间按右侧数值比较。', anchor='w').pack(fill='x', pady=(8, 2))
-        self.label(self.numeric_tab, '目录来自本机游戏的 74 类属性；新选项默认关闭。', anchor='w', font=('Microsoft YaHei UI', 9)).pack(fill='x', pady=(0, 6))
+        self.label(self.numeric_tab, '支持搜索与分类；满足任意一条已启用规则即可显示。', anchor='w', font=('Microsoft YaHei UI', 9)).pack(fill='x', pady=(0, 6))
         self.draw_rules()
 
     def filtered_indices(self):
@@ -201,6 +275,8 @@ class Settings:
     def wheel(self, event):
         if self.features.select() == str(self.native_settings.tab):
             return self.native_settings.scrollbar.wheel(event)
+        if self.features.select() == str(self.author_tab):
+            return self.author_scrollbar.wheel(event)
         if self.features.select() != str(self.filter_page):
             return
         if self.tabs.select() == str(self.numeric_tab):
@@ -311,9 +387,9 @@ class Settings:
         self.lower_count.configure(text=f'已选 {sum(v.get() for v in self.lower_skill_vars.values())} / {len(self.lower_skill_vars)}')
 
     def visual_settings(self):
-        self.transparent = tk.BooleanVar(value=self.settings.get('transparent_background', False))
+        self.transparent = tk.BooleanVar(value=self.settings.get('transparent_background', True))
         self.check(self.visual_tab, '完全透明背景（关闭后使用半透明深色底）', self.transparent).pack(anchor='w', padx=8, pady=(18, 12))
-        self.label(self.visual_tab, '窗口不透明度（数值越小越透明）', anchor='w').pack(fill='x', padx=12)
+        self.label(self.visual_tab, '深色模式不透明度（完全透明背景时，文字保持清晰）', anchor='w').pack(fill='x', padx=12)
         self.opacity = tk.DoubleVar(value=self.settings.get('opacity', .86) * 100)
         tk.Scale(self.visual_tab, from_=30, to=100, orient='horizontal', variable=self.opacity, resolution=1,
                  bg=BG, fg=FG, troughcolor=PANEL, highlightthickness=0, activebackground=GOLD).pack(fill='x', padx=12)
@@ -321,7 +397,7 @@ class Settings:
         font = tk.Frame(self.visual_tab, bg=BG)
         font.pack(fill='x', padx=12, pady=(16, 12))
         self.label(font, '文字大小').pack(side='left', padx=(0, 12))
-        tk.Spinbox(font, from_=9, to=18, textvariable=self.font_size, width=6).pack(side='left')
+        tk.Spinbox(font, from_=9, to=18, textvariable=self.font_size, width=6, bg=PANEL, fg=FG, buttonbackground=PANEL, relief='flat').pack(side='left')
         self.label(self.visual_tab, '窗口始终置顶；拖动标题栏移动，拉边框缩放。\n宽度变化时文字自动换行，栏目之间可拖动分隔线。',
                    anchor='w', justify='left').pack(fill='x', padx=12, pady=10)
         self.label(self.visual_tab, '关闭此设置页后继续后台检测。', anchor='w').pack(fill='x', padx=12, pady=8)
@@ -360,10 +436,16 @@ class Settings:
         settings.pop('auto_pickup', None)
         self.write('loot-filter-rules.json', changed)
         self.write('loot-overlay-settings.json', settings)
-        self.window.destroy()
+        self.settings = settings
+        self.rules = changed
+        self.notice.configure(text='已保存', fg=MUTED)
 
     def cancel(self):
-        self.window.destroy()
+        main = getattr(self.overlay, 'main_window', None)
+        if main and main.window is self.window:
+            main.dismiss()
+        else:
+            self.window.destroy()
 
 
 def open_settings(overlay):

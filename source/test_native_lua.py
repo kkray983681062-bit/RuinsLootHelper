@@ -30,6 +30,22 @@ class NativeLuaTests(unittest.TestCase):
             assert(adapter.picks == 1)
         ''')
 
+    def test_grid_capture_stops_on_closed_bag_inactive_disabled_and_stale_requests(self):
+        self.lua.execute('''
+            stopped=0
+            function adapter:stop_grid() stopped=stopped+1 end
+            function adapter:grid() return nil,{state="waiting_for_tick",cells=59} end
+            request.markers=true;adapter.current.backpack_open=true
+            assert(engine:step(request,1,1).grid_status.cells==59 and stopped==0)
+            adapter.current.backpack_open=false;engine:step(request,2,2);assert(stopped==1)
+            adapter.current.backpack_open=true;request.active=false
+            engine:step(request,3,3);assert(stopped==2)
+            request.active=true;request.markers=false
+            engine:step(request,4,4);assert(stopped==3)
+            request.markers=true;request.expires=0
+            engine:step(request,5,5);assert(stopped==4)
+        ''')
+
     def test_drop_filter_updates_independently_of_pickup_and_focus(self):
         self.lua.execute('''
             updated=0

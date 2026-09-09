@@ -167,13 +167,21 @@ class NativeGameTests(unittest.TestCase):
         ''')
 
     def test_current_bag_cells_follow_panel_movement_and_ignore_other_bags(self):
+        from test_bag_geometry import Geometry
+        self.lua.globals().Geometry = Geometry
         self.lua.execute('''
+            package.path=package.path..";native/Mods/RuinsHelper/Scripts/?.lua"
             adapter:snapshot(request)
-            local cells={};local dx,dy=0,0
+            local cells={};local dx,dy,now=0,0,10
+            os.clock=function() return now end
+            local callback
+            RegisterHook=function(_,fn) callback=fn;return 1,2 end
+            local tick=object({GetFullName=function() return "Function /Game/UI/Cell.Cell_C:Tick" end})
             for i=0,59 do
-                local cell=object({["在背包"]=true,["在仓库"]=false,["格子id"]=i})
+                local cell=object({["在背包"]=true,["在仓库"]=false,["格子ID"]=i,Tick=tick})
+                cell.GetAddress=function() return 1000+i end
                 cell.IsVisible=function() return true end
-                cell.GetCachedGeometry=function() return {x=100+i%10*60+dx,y=100+math.floor(i/10)*60+dy} end
+                cell.GetCachedGeometry=function() return {} end
                 cells[i+1]=cell
             end
             -- Pinned UE4SS returns a list of RemoteUnrealParam wrappers here.
@@ -182,7 +190,7 @@ class NativeGameTests(unittest.TestCase):
                 local wrapped={}
                 for i,cell in ipairs(cells) do wrapped[i]={get=function() return cell end} end
                 return wrapped
-            end, GetChildrenCount=function() return #cells end,
+            end, GetAddress=function() return 700 end, GetChildrenCount=function() return #cells end,
                 GetChildAt=function(_,i) return cells[i+1] end})
             main["背包"]=object({["格子框"]=wrap})
             local slate=object({GetLocalSize=function() return {X=54,Y=54} end,
@@ -190,15 +198,23 @@ class NativeGameTests(unittest.TestCase):
             StaticFindObject=function() return slate end
             FindAllOf=function() error("Must use the current player's bag tree") end
             request.viewport={1200,900};request.monotonic=10
+            local function frame()
+                for n,cell in ipairs(cells) do
+                    local i=n-1
+                    local g=Geometry(100+i%10*60+dx,100+math.floor(i/10)*60+dy)
+                    callback({get=function() return cell end},{get=function() return g end})
+                end
+            end
+            assert(adapter:grid(request)==nil);frame()
             local first=adapter:grid(request)
             assert(first and first.slots["0"][1]==100 and first.slots["59"][2]==400)
-            dx=150;dy=45;request.monotonic=10.1
+            dx=150;dy=45;request.monotonic=10.1;now=10.1;frame()
             local moved=adapter:grid(request)
             assert(moved.slots["0"][1]==250 and moved.slots["59"][2]==445)
             local last=cells[60];cells[60]=nil
             assert(adapter:grid(request)==nil, "an incomplete bag must not reuse old positions")
             cells[60]=last
-            cells[5]["格子id"]=3
+            cells[5]["格子ID"]=3
             assert(adapter:grid(request)==nil)
         ''')
 
