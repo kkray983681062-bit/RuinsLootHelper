@@ -25,6 +25,47 @@ def write_atomic(path, content):
         temporary.unlink(missing_ok=True)
 
 
+def installation_status(game, directory):
+    """Read-only verification for the assistant's own native installation."""
+    from game_install import resolve_game
+    directory = Path(directory)
+    receipt_path = directory / 'native-install.json'
+    if not receipt_path.is_file():
+        return {'state': 'not_installed'}
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding='utf8'))
+    except (OSError, ValueError):
+        return {'state': 'receipt_invalid'}
+    if not isinstance(receipt, dict) or not isinstance(receipt.get('files'), dict):
+        return {'state': 'receipt_invalid'}
+    game = resolve_game(game)
+    if game is None:
+        return {'state': 'game_not_found', 'receipt': receipt}
+    target = game.parent.resolve()
+    try:
+        recorded = Path(receipt.get('directory', '')).resolve()
+    except (OSError, TypeError, ValueError):
+        return {'state': 'receipt_invalid', 'receipt': receipt}
+    if recorded != target:
+        return {'state': 'installed_for_other_game', 'receipt': receipt}
+    checked = 0
+    for relative, digest in receipt['files'].items():
+        if not isinstance(relative, str) or not isinstance(digest, str) or len(digest) != 64:
+            return {'state': 'receipt_invalid', 'receipt': receipt}
+        path = (target / relative).resolve()
+        if not path.is_relative_to(target):
+            return {'state': 'receipt_invalid', 'receipt': receipt}
+        if not path.is_file():
+            return {'state': 'installation_missing_file', 'receipt': receipt, 'file': relative}
+        if sha(path) != digest:
+            return {'state': 'installation_changed', 'receipt': receipt, 'file': relative}
+        checked += 1
+    state = receipt.get('state')
+    if state not in ('installed_waiting_for_game_restart', 'installed'):
+        state = 'installed_waiting_for_game_restart'
+    return {'state': state, 'receipt': receipt, 'files_checked': checked, 'game': str(game)}
+
+
 def install(game, directory, archive=None):
     from game_install import resolve_game
     game = resolve_game(game)

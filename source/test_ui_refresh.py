@@ -55,6 +55,25 @@ class RefreshTests(unittest.TestCase):
         self.assertIs(n.lock_card, n.recycle_card)
         self.assertEqual(n.recycle_check.cget('state'), 'normal')
 
+    def test_component_status_makes_completed_installation_visible(self):
+        from overlay_native import component_presentation
+        text, button = component_presentation(False, False, {'state': 'installed_waiting_for_game_restart'})
+        self.assertEqual(text, '● 游戏组件已安装 · 重启游戏后自动连接')
+        self.assertEqual(button, '已安装 · 校验 / 更新')
+        text, button = component_presentation(True, False, {'state': 'installed_waiting_for_game_restart'})
+        self.assertEqual(text, '● 游戏组件已安装并连接')
+        self.assertEqual(button, '已连接 · 更新组件')
+        text, button = component_presentation(False, False, {'state': 'not_installed'})
+        self.assertEqual(text, '○ 尚未安装游戏组件')
+        self.assertEqual(button, '安装游戏组件')
+        text, button = component_presentation(False, False, {'state': 'installation_changed'})
+        self.assertEqual(text, '⚠ 已安装文件被修改，请校验或更新组件')
+        self.assertEqual(button, '校验 / 更新组件')
+        text, button = component_presentation(False, False, {'state': 'installed_waiting_for_game_restart'},
+                                              '安装未完成：组件文件被占用')
+        self.assertEqual(text, '安装未完成：组件文件被占用')
+        self.assertEqual(button, '校验 / 更新组件')
+
     def test_cold_background_feed_does_not_reset_saved_preferences(self):
         from unittest.mock import patch
         saved = {'native': {'lock': True, 'bagua_marker': True}, 'font_size': 15,

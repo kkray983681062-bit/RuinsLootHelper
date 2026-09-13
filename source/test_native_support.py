@@ -122,6 +122,20 @@ class NativeInstallTests(unittest.TestCase):
                 self.assertEqual((game.parent/'ue4ss/Mods/mods.txt').read_text(), 'RuinsHelper : 1\n')
                 self.assertEqual(receipt['files'], native_support.install(game, data, archive)['files'])
 
+    def test_installation_status_distinguishes_missing_verified_and_changed_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            game, data, archive = self.fixture(root)
+            digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+            with patch.object(native_support, 'SHA256', digest):
+                self.assertEqual(native_support.installation_status(game, data)['state'], 'not_installed')
+                native_support.install(game, data, archive)
+                status = native_support.installation_status(game, data)
+                self.assertEqual(status['state'], 'installed_waiting_for_game_restart')
+                self.assertEqual(status['files_checked'], len(status['receipt']['files']))
+                (game.parent/'ue4ss/UE4SS.dll').write_bytes(b'changed by another tool')
+                self.assertEqual(native_support.installation_status(game, data)['state'], 'installation_changed')
+
     def test_update_does_not_rewrite_unchanged_runtime_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

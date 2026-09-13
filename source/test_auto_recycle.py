@@ -125,6 +125,21 @@ class RecycleClientTests(unittest.TestCase):
         with patch('native_client.time.monotonic', return_value=now+30.1):
             self.assertIsNotNone(self.send(s, self.state())['recycle'])
 
+    def test_quality_library_equipment_is_protected_before_recycle(self):
+        s = self.full_bag()
+        self.client = client_fixture.NativeClient()
+        protected = s.current['items'][0]['item']
+        protected.update({'锁定': False, '名字': '霄引', '等阶': 10, '品质': 3,
+                          '基础属性': {'攻击上限': 45, '魔法上限': 48}})
+        s.current['backpack_slot_states'][0] = [1, False]
+        s.settings['lock_library'] = {'qualities': ['完美'], 'quality_tiers': [10]}
+        s.sections.clear()
+        self.send(s)
+        request = self.send(s, self.state())
+        self.assertEqual(request['locks'][0]['index'], 0)
+        self.assertIsNone(request['recycle'])
+        self.assertEqual(request['recycle_wait'], 'waiting_for_locks')
+
     def test_unchanged_command_is_not_duplicated_and_bad_inventory_is_rejected(self):
         s = self.full_bag()
         first = self.send(s, self.state())['recycle']

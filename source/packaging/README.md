@@ -1,6 +1,6 @@
 # Windows 分发构建
 
-0.3.5 使用 Python 3.11、Tk、Win32 和 PyInstaller。入口为 `loot_app.py`；设置面板与鼠标穿透标记层分开，读取工作在独立后台进程中进行。
+0.3.6 使用 Python 3.11、Tk、Win32 和 PyInstaller。入口为 `loot_app.py`；设置面板与鼠标穿透标记层分开，读取工作在独立后台进程中进行。
 
 游戏路径优先使用已保存的有效路径，失效后通过 Steam 注册表、`libraryfolders.vdf` 和 AppID 4364910 的安装记录重新发现。内存中的角色和背包地址仍随游戏会话重新定位，不复用旧进程地址。
 
@@ -15,7 +15,7 @@ python -X utf8 -B packaging/build_release.py
 
 需事先放入固定的 `runtime/UE4SS-2bfa839f.zip`，下载地址及散列见 `native/README.md`。构建器会核对运行库、包内模块、私有数据排除、ZIP 完整性与 SHA-256。
 
-产物为 `releases/0.3.5/破晓装备助手-0.3.5-Windows-x64.zip`，可运行目录为 `release-staging-0.3.5/破晓装备助手/`。
+产物为 `releases/0.3.6/RuinsLootHelper-0.3.6-Windows-x64.zip`，可运行目录为 `release-staging-0.3.6/破晓装备助手/`。
 
 必须分发完整目录或 ZIP，不能只复制 EXE。Windows 10/11 x64 无需另装 Python；one-folder 模式不在运行时临时解包。EXE 通过管理员清单请求与游戏匹配的读取权限。
 

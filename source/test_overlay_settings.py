@@ -79,7 +79,7 @@ class SettingsTests(unittest.TestCase):
             dialog = Settings(host, show=False)
             self.assertEqual(dialog.window.title(), '破晓装备助手 · 功能设置')
             self.assertEqual([dialog.features.tab(tab, 'text') for tab in dialog.features.tabs()],
-                             ['装备筛选', '背包定位', '进阶辅助', '悬浮窗', '作者的话', '项目与更新', '掉落屏蔽清单'])
+                             ['装备筛选', '背包定位', '进阶辅助', '悬浮窗', '作者的话', '项目与更新', '掉落屏蔽清单', '品质装备锁定'])
             self.assertIn('下技能', [dialog.tabs.tab(tab, 'text') for tab in dialog.tabs.tabs()])
             self.assertEqual(len(dialog.enabled_vars), 74)
             self.assertEqual(sum(x.get() for x in dialog.enabled_vars), 11)
@@ -153,6 +153,49 @@ class SettingsTests(unittest.TestCase):
             groups[2][0].invoke()
             self.assertEqual(reopened.native_settings.batch_choice.get(), 1)
             self.assertEqual(reopened.native_settings.values()['native']['pickup_batch'], 1)
+            reopened.cancel()
+        finally:
+            root.destroy()
+
+    def test_quality_equipment_library_and_thresholds_persist_independently(self):
+        root = tk.Tk()
+        root.withdraw()
+        files = {'loot-filter-rules.json': copy.deepcopy(DEFAULT_RULES), 'loot-overlay-settings.json': {}}
+        class Host:
+            def read_file(self, name, default=None):
+                return copy.deepcopy(files.get(name, default))
+            def write_file(self, name, value):
+                files[name] = value
+        host = Host()
+        host.root = root
+        try:
+            dialog = Settings(host, show=False)
+            self.assertTrue(hasattr(dialog, 'lock_library'))
+            library = dialog.lock_library
+            library.quality_vars['完美'].set(True)
+            library.quality_tier_vars[10].set(True)
+            library.query.set('霄引')
+            library.tier.set('T6')
+            library.part.set('武器')
+            library.redraw()
+            self.assertEqual(library.tree.get_children(), ('10:1:霄引',))
+            self.assertEqual(library.threshold_options('10:1:霄引'),
+                             ('攻击下限', '攻击上限', '魔法下限', '魔法上限'))
+            self.assertEqual(library.threshold_label('10:1:霄引', '魔法上限'),
+                             '魔法上限（图鉴满值 48）')
+            library.toggle('10:1:霄引')
+            library.set_threshold('10:1:霄引', {'魔法上限': 48})
+            dialog.apply()
+            saved = files['loot-overlay-settings.json']['lock_library']
+            self.assertEqual(saved['qualities'], ['完美'])
+            self.assertEqual(saved['quality_tiers'], [10])
+            self.assertEqual(saved['equipment_keys'], ['10:1:霄引'])
+            self.assertEqual(saved['thresholds']['10:1:霄引'], {'魔法上限': 48})
+            reopened = Settings(host, show=False)
+            self.assertIn('10:1:霄引', reopened.lock_library.model.selected)
+            self.assertTrue(reopened.lock_library.quality_vars['完美'].get())
+            self.assertTrue(reopened.lock_library.quality_tier_vars[10].get())
+            self.assertEqual(reopened.lock_library.thresholds['10:1:霄引'], {'魔法上限': 48})
             reopened.cancel()
         finally:
             root.destroy()

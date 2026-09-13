@@ -99,6 +99,15 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(m.skill_view(64)['name'], '冲刺无冷却')
         self.assertEqual(m.skill_view(11)['name'], '天雷伤害-10%，连续施法+1')
 
+    def test_catalog_includes_current_official_t6_equipment(self):
+        m = self.module()
+        catalog = m.catalog_data()
+        self.assertEqual(catalog['source_build'], '25281393')
+        t6 = [row for row in catalog['equipment'] if row['tier_raw'] == 10]
+        self.assertEqual(len(t6), 24)
+        xiaoyin = next(row for row in t6 if row['name'] == '霄引')
+        self.assertEqual(xiaoyin['base']['基础属性']['魔法上限'], 48)
+
     def test_locked_gear_is_hidden_in_both_sections(self):
         m = self.module()
         item = {'名字': '追风', '等阶': 9, '技能1': 64, '锁定': True, '极品属性': {'特殊属性': {'幸运': 4}}}

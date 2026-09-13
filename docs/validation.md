@@ -1,5 +1,15 @@
 # 验证与限制
 
+## 0.3.6 — 2026-09-13
+
+- 源码完整回归：`python -X utf8 -B -m unittest discover -q`，215 项通过。
+- Windows x64 便携包由构建器生成，ZIP 包含 1,100 个文件，大小 75,676,256 字节，SHA-256 为 `4820b2857dab138d3942215d7caf9adc2f5709c326dd3ba2fee61563c0279195`。
+- 重新打开 ZIP 校验归档完整性、离线 UE4SS 运行库、私人运行时数据排除，以及 `lock_library`、`overlay_lock_library`、`native_support`、`overlay_native` 与 `startup_window` 已进入冻结程序。
+- 此构建终端为普通权限，而发行 EXE 要求管理员权限；因此未在该终端执行冻结 EXE 的 `--self-test`。首次运行需接受 Windows 的管理员提示，以便读取同样以管理员身份运行的游戏。
+- 主动原生功能仍默认关闭；构建清单保持 `native_game_verified: false`，不以源码或打包检查替代每台电脑上的游戏内验证。
+
+## 0.3.5 — 2026-09-10（历史记录）
+
 检查日期：2026-09-10。对象为 0.3.5 源码与本次 Windows x64 便携包。
 
 ## 已检查

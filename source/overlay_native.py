@@ -10,6 +10,31 @@ from ui_theme import BG, PANEL, FG, MUTED, GOLD, LINE, GREEN, label
 from ui_switch import Switch
 
 
+def component_presentation(connected, protocol_mismatch, installation, message=None):
+    """Concise, user-facing component state and matching action label."""
+    if protocol_mismatch:
+        return '组件需更新 · 更新后重启游戏', '更新组件'
+    if connected:
+        return '● 游戏组件已安装并连接', '已连接 · 更新组件'
+    if isinstance(message, str) and message.startswith('安装未完成：'):
+        return message, '校验 / 更新组件'
+    installation = installation if isinstance(installation, dict) else {}
+    state = installation.get('state')
+    if state in ('installed_waiting_for_game_restart', 'installed'):
+        return '● 游戏组件已安装 · 重启游戏后自动连接', '已安装 · 校验 / 更新'
+    if state == 'installation_changed':
+        return '⚠ 已安装文件被修改，请校验或更新组件', '校验 / 更新组件'
+    if state == 'installation_missing_file':
+        return '⚠ 已安装文件缺失，请校验或更新组件', '校验 / 更新组件'
+    if state in ('receipt_invalid', 'installed_for_other_game'):
+        return '⚠ 安装记录无效或对应其他游戏目录，请校验或更新组件', '校验 / 更新组件'
+    if state == 'game_not_found':
+        return '○ 未定位游戏，暂时无法核对组件', '安装 / 更新组件'
+    if message:
+        return message, '安装游戏组件'
+    return '○ 尚未安装游戏组件', '安装游戏组件'
+
+
 class NativeSettings:
     def __init__(self, dialog):
         self.dialog = dialog
@@ -38,6 +63,7 @@ class NativeSettings:
                          for key in ('numeric', 'legendary', 'lower')}
         self.messages = queue.Queue()
         self.job, self.last_message, self.mode = None, None, None
+        self.installation, self.installation_checked = {}, False
         self.cards, self.wrap_labels = [], []
         label(self.body, '进阶辅助', size=20, bold=True).pack(anchor='w', pady=(6, 6))
         label(self.body, '如果你还在第一次探索，建议先保留亲手尝试的乐趣。\n这里的便利，可以晚一点再用。',
@@ -78,13 +104,16 @@ class NativeSettings:
         self.drop_card, self.drop_check = self.card('掉落屏蔽清单', '选择不想掉落的装备和图鉴。', self.drop_enabled)
         self.codex_summary = self.text(self.drop_card, '与装备、图鉴清单同步', GREEN)
         dialog.button(self.drop_card, '设置清单 →', self.open_exclusions).pack(anchor='w', padx=14, pady=(4, 14))
-        self.lock_card, self.lock_check = self.card('自动锁定', '先保护达到筛选条件的装备。', self.lock)
+        self.lock_card, self.lock_check = self.card('自动锁定', '先保护筛选、品质或装备库命中的装备。', self.lock)
         self.recycle_card = self.lock_card
         self.lock_status = self.text(self.lock_card, '已关闭', GREEN)
         lock_details = self.details(self.lock_card)
         for key, title in (('numeric', '词条'), ('legendary', '上技能'), ('lower', '下技能')):
             dialog.check(lock_details, title, self.sections[key]).pack(side='top', anchor='w')
         self.text(lock_details, '手动解锁后静默 30 秒；装备换格后继续跟随。相同属性的装备会一起暂缓。')
+        self.lock_library_summary = self.text(self.lock_card, '品质 / 装备库规则：未设置', GREEN)
+        dialog.button(self.lock_card, '配置品质 / 装备库规则 →', self.open_lock_library).pack(
+            anchor='w', padx=14, pady=(0, 4))
         tk.Frame(self.lock_card, bg=LINE, height=1).pack(fill='x', padx=14, pady=(12, 8))
         self.text(self.lock_card, '先锁定达标装备，再回收', GOLD)
         recycle_head = tk.Frame(self.lock_card, bg=PANEL)
@@ -165,6 +194,9 @@ class NativeSettings:
     def open_exclusions(self):
         self.dialog.features.select(self.dialog.pickup_library.tab)
 
+    def open_lock_library(self):
+        self.dialog.features.select(self.dialog.lock_library.tab)
+
     def update_recycle_available(self, *_):
         enabled = self.lock.get()
         if not enabled:
@@ -195,29 +227,46 @@ class NativeSettings:
                 messages.put('安装未完成：' + str(exc))
         threading.Thread(target=work, name='NativeInstaller', daemon=True).start()
 
+    def inspect_installation(self):
+        import loot_overlay
+        from native_support import installation_status
+        saved = self.dialog.overlay.read_file('app-settings.json', {}) or {}
+        saved = saved if isinstance(saved, dict) else {}
+        game = saved.get('game_exe') or getattr(self.dialog, 'game_exe', None)
+        try:
+            return installation_status(game, loot_overlay.BASE)
+        except (OSError, ValueError):
+            return {'state': 'receipt_invalid'}
+
     def refresh(self):
         self.job = None
+        refresh_installation = not self.installation_checked
         try:
             self.last_message = self.messages.get_nowait()
             self.install_button.configure(state='normal')
+            refresh_installation = True
         except queue.Empty:
             pass
+        if refresh_installation:
+            self.installation = self.inspect_installation()
+            self.installation_checked = True
         state = self.dialog.overlay.read_file('native-status.json', {}) or {}
         connected = fresh_status(state) and state.get('protocol') == PROTOCOL and state.get('ready')
         self.update_rift_available(state)
-        if fresh_status(state) and state.get('protocol') != PROTOCOL:
-            status = '组件需更新 · 更新后重启游戏'
-        elif connected:
-            status = '● 游戏组件已连接'
-        else:
-            status = self.last_message or '○ 游戏组件未连接'
-        self.status.configure(text=status, fg=GREEN if connected else MUTED)
+        protocol_mismatch = fresh_status(state) and state.get('protocol') != PROTOCOL
+        status, install_label = component_presentation(connected, protocol_mismatch, self.installation, self.last_message)
+        self.status.configure(text=status, fg=GREEN if connected or self.installation.get('state') in
+                              ('installed_waiting_for_game_restart', 'installed') else GOLD if status.startswith('⚠') else MUTED)
+        self.install_button.configure(text=install_label)
         code = state.get('pickup_state')
         pickup = {'full':'背包已满，已暂停','inactive':'切出游戏，已暂停','menu':'菜单或背包打开，已暂停',
                   'requested':'正在拾取','waiting_for_loot':'等待附近掉落','waiting_for_result':'等待游戏确认',
                   'recycling':'回收中，稍后继续'}.get(code, '等待附近掉落')
         self.pickup_status.configure(text='已关闭' if not self.pickup.get() else pickup if connected else '等待游戏组件连接')
         self.lock_status.configure(text='已关闭' if not self.lock.get() else '正在保护达标装备' if connected else '等待游戏组件连接')
+        library = getattr(self.dialog, 'lock_library', None)
+        if library is not None:
+            self.lock_library_summary.configure(text=library.summary())
         recycle = {'requested':'已调用游戏回收','unlock_grace':'手动解锁静默中','waiting_for_locks':'等待达标装备锁定',
                    'inventory_changed':'背包变化，重新检查','error':'暂不可用，请检查组件'}.get(state.get('recycle_state'), '等待背包剩余 1 格')
         self.recycle_status.configure(text='需先开启自动锁定' if not self.lock.get() else '已关闭' if not self.auto_recycle.get()

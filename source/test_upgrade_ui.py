@@ -89,6 +89,17 @@ class UIUpgradeTests(unittest.TestCase):
         finally:
             guide.window.destroy()
 
+    def test_startup_window_close_exits_the_helper_instead_of_hiding_it(self):
+        from startup_window import StartupWindow
+        guide = StartupWindow(self.overlay, r'D:\Steam\Ruins of Dawn\RuinsOfDawn.exe', '0.3.0', show=False)
+        try:
+            with patch.object(self.overlay, 'close') as close:
+                guide.exit()
+                close.assert_called_once_with()
+        finally:
+            if guide.window.winfo_exists():
+                guide.window.destroy()
+
     def test_lower_checkbox_remains_off_through_background_save_and_reopen(self):
         o = self.overlay
         o.display_button.invoke()

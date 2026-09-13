@@ -155,5 +155,24 @@ class NativeClientTests(unittest.TestCase):
         snapshot.settings['native']['skip_codex'] = False
         self.assertEqual(self.send(snapshot)['codex_names'], {})
 
+    def test_quality_library_rule_adds_a_lock_without_numeric_filter_hit(self):
+        snapshot = Snapshot(
+            status={'game_pid': 123}, live=True,
+            current={'items': [{'index': 4, 'item': {
+                '物品类型': 1, 'ID': 13, '锁定': False, '名字': '霄引', '等阶': 10,
+                '品质': 3, '基础属性': {'攻击上限': 45, '魔法上限': 48},
+            }}]},
+            ui={'ui': {'valid': True, 'player_address': 999}},
+            settings={
+                'native': {'lock': True, 'skip_codex': True},
+                'lock_library': {'qualities': ['完美'], 'quality_tiers': [10]},
+            },
+            sections={'numeric': [], 'legendary': [], 'lower': []},
+        )
+        self.send(snapshot)
+        command = self.send(snapshot)['locks']
+        self.assertEqual(len(command), 1)
+        self.assertEqual(command[0]['index'], 4)
+
 
 if __name__ == '__main__':unittest.main()

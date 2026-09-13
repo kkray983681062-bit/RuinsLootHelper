@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from native_support import ARCHIVE_NAME, SHA256 as RUNTIME_SHA256
 
-VERSION = '0.3.5'
+VERSION = '0.3.6'
 STAGING = ROOT / ('release-staging-' + VERSION)
 APP = STAGING / '破晓装备助手'
 DESTINATION = ROOT / 'releases' / VERSION
@@ -61,7 +61,7 @@ def main():
     files = sorted(path for path in APP.rglob('*') if path.is_file())
     assert not [path for path in files if path.name in banned_files or path.suffix in ('.lock', '.flag')]
     DESTINATION.mkdir(parents=True, exist_ok=True)
-    destination = DESTINATION / f'破晓装备助手-{VERSION}-Windows-x64.zip'
+    destination = DESTINATION / f'RuinsLootHelper-{VERSION}-Windows-x64.zip'
     with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as output:
         for path in files:
             output.write(path, path.relative_to(STAGING).as_posix())
@@ -79,7 +79,8 @@ def main():
         'native_runtime_archive': packaged_runtime.relative_to(APP).as_posix(),
         'native_runtime_bytes': packaged_runtime.stat().st_size, 'native_runtime_sha256': RUNTIME_SHA256,
         'native_features_enabled_by_default': False, 'native_game_verified': False,
-        'features': ['filters', 'backpack_markers', 'native_pickup', 'auto_lock', 'auto_recycle', 'auto_rift', 'bagua_marker'],
+        'features': ['filters', 'backpack_markers', 'native_pickup', 'auto_lock', 'quality_equipment_lock',
+                     'auto_recycle', 'auto_rift', 'bagua_marker'],
     }
     (DESTINATION / 'build-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf8')
     print(json.dumps(manifest, ensure_ascii=False, indent=2))

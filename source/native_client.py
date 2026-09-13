@@ -3,6 +3,7 @@ import time
 import uuid
 
 from live_items import clean
+from lock_library import selected_indices
 from native_policy import AutoLockNotices, LockPolicy, identity
 from pickup_library import codex_names, codex_selection, pickup_options
 
@@ -127,6 +128,8 @@ class NativeClient:
         self.policy.observe(snapshot.current.get('items', []) if usable else [], now)
         selected = config.get('lock_sections', {'numeric': True, 'legendary': False, 'lower': False})
         indices = {entry['index'] for key, entries in snapshot.sections.items() if selected.get(key, False) for entry in entries}
+        indices.update(selected_indices(snapshot.current.get('items', []) if usable else [],
+                                       snapshot.settings.get('lock_library', {})))
         ready = (fresh_status(native) and native.get('protocol') == PROTOCOL and native.get('ready') and native.get('session') == self.session
                  and native.get('player_address') == player and native.get('game_pid') == pid)
         if ready and self.rift_permission is None:

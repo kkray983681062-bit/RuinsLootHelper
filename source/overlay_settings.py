@@ -83,6 +83,8 @@ class Settings:
         self.build_project_page(VERSION)
         from overlay_pickup_library import PickupLibrarySettings
         self.pickup_library = PickupLibrarySettings(self)
+        from overlay_lock_library import LockLibrarySettings
+        self.lock_library = LockLibrarySettings(self)
         bottom = tk.Frame(self.window, bg=BG)
         bottom.pack(side='bottom', fill='x', padx=24, pady=14, before=self.features)
         self.notice = tk.Label(bottom, text='已保存', bg=BG, fg=MUTED, anchor='w')
@@ -162,7 +164,7 @@ class Settings:
         # Child pages refer back to this dialog, forming Python cycles. Release
         # Tcl variables here on the UI thread, before a file-worker GC can run.
         for owner in (self, getattr(self, 'feature_settings', None), getattr(self, 'native_settings', None),
-                      getattr(self, 'pickup_library', None)):
+                      getattr(self, 'pickup_library', None), getattr(self, 'lock_library', None)):
             if owner is None:
                 continue
             for name, value in list(vars(owner).items()):
@@ -433,6 +435,7 @@ class Settings:
         settings.update(feature_values)
         settings.update(self.native_settings.values())
         settings.update(self.pickup_library.values())
+        settings.update(self.lock_library.values())
         settings.pop('auto_pickup', None)
         self.write('loot-filter-rules.json', changed)
         self.write('loot-overlay-settings.json', settings)

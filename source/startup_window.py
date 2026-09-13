@@ -11,7 +11,7 @@ class StartupWindow:
         self.dialog.game_exe = str(game)
         self.window = self.dialog.window
         self.window.title('破晓装备助手 ' + version)
-        self.window.protocol('WM_DELETE_WINDOW', self.dismiss)
+        self.window.protocol('WM_DELETE_WINDOW', self.exit)
         self.window.bind('<ButtonPress>', lambda _: setattr(self, 'user_open', True), add='+')
         self.updates = self.dialog.updates
         self.native_button = self.dialog.native_settings.install_button
@@ -19,7 +19,7 @@ class StartupWindow:
         overlay.settings_dialog = self.dialog
         overlay.popup = self.window
         overlay.project_window = self.show_project
-        self.dialog.button(self.dialog.notice.master, '退出助手', overlay.close).pack(side='left', padx=14)
+        self.dialog.button(self.dialog.notice.master, '退出助手', self.exit).pack(side='left', padx=14)
         self.set_state({'status': 'waiting_for_game'})
         if show:
             self.window.deiconify()
@@ -51,6 +51,10 @@ class StartupWindow:
     def show_project(self):
         self.show()
         self.dialog.features.select(self.dialog.project_tab)
+
+    def exit(self):
+        self.user_open = False
+        self.overlay.close()
 
     def dismiss(self):
         self.user_open = False
