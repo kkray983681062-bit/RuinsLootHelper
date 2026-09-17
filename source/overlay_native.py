@@ -104,15 +104,14 @@ class NativeSettings:
         self.drop_card, self.drop_check = self.card('掉落屏蔽清单', '选择不想掉落的装备和图鉴。', self.drop_enabled)
         self.codex_summary = self.text(self.drop_card, '与装备、图鉴清单同步', GREEN)
         dialog.button(self.drop_card, '设置清单 →', self.open_exclusions).pack(anchor='w', padx=14, pady=(4, 14))
-        self.lock_card, self.lock_check = self.card('自动锁定', '先保护筛选、品质或装备库命中的装备。', self.lock)
+        self.lock_card, self.lock_check = self.card('自动锁定', '满足一条完整保留规则后锁定装备。', self.lock)
         self.recycle_card = self.lock_card
         self.lock_status = self.text(self.lock_card, '已关闭', GREEN)
         lock_details = self.details(self.lock_card)
-        for key, title in (('numeric', '词条'), ('legendary', '上技能'), ('lower', '下技能')):
-            dialog.check(lock_details, title, self.sections[key]).pack(side='top', anchor='w')
+        self.text(lock_details, '品质、T级、装备、属性和技能条件统一在“自动锁定”页设置。')
         self.text(lock_details, '手动解锁后静默 30 秒；装备换格后继续跟随。相同属性的装备会一起暂缓。')
-        self.lock_library_summary = self.text(self.lock_card, '品质 / 装备库规则：未设置', GREEN)
-        dialog.button(self.lock_card, '配置品质 / 装备库规则 →', self.open_lock_library).pack(
+        self.lock_library_summary = self.text(self.lock_card, '保留规则：未设置', GREEN)
+        dialog.button(self.lock_card, '配置自动锁定规则 →', self.open_lock_library).pack(
             anchor='w', padx=14, pady=(0, 4))
         tk.Frame(self.lock_card, bg=LINE, height=1).pack(fill='x', padx=14, pady=(12, 8))
         self.text(self.lock_card, '先锁定达标装备，再回收', GOLD)

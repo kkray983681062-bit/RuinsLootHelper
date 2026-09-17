@@ -79,13 +79,19 @@ class SettingsTests(unittest.TestCase):
             dialog = Settings(host, show=False)
             self.assertEqual(dialog.window.title(), '破晓装备助手 · 功能设置')
             self.assertEqual([dialog.features.tab(tab, 'text') for tab in dialog.features.tabs()],
-                             ['装备筛选', '背包定位', '进阶辅助', '悬浮窗', '作者的话', '项目与更新', '掉落屏蔽清单', '品质装备锁定'])
+                             ['装备筛选', '背包定位', '进阶辅助', '自动锁定', '悬浮窗', '作者的话', '项目与更新', '掉落屏蔽清单'])
+            self.assertIn(str(dialog.lock_library.tab), dialog.features.buttons)
             self.assertIn('下技能', [dialog.tabs.tab(tab, 'text') for tab in dialog.tabs.tabs()])
             self.assertEqual(len(dialog.enabled_vars), 74)
             self.assertEqual(sum(x.get() for x in dialog.enabled_vars), 11)
             self.assertEqual([x['label'] for x in dialog.types], ['武器', '项链', '戒指', '宝物'])
-            self.assertEqual(len(dialog.pair_vars), 20)
+            self.assertEqual(len(dialog.pair_vars), 24)
             self.assertEqual(sum(x.get() for x in dialog.pair_vars.values()), 4)
+            dialog.choose_pairs('t6')
+            self.assertEqual(
+                [key for key, variable in dialog.pair_vars.items() if variable.get()],
+                ['10:1', '10:4', '10:6', '10:9'],
+            )
             dialog.query.set('物理伤害')
             i = next(i for i, x in enumerate(dialog.rules) if x['field'] == '近战伤害增加')
             dialog.enabled_vars[i].set(True)
@@ -94,6 +100,7 @@ class SettingsTests(unittest.TestCase):
             dialog.choose_pairs('none')
             dialog.pair_vars['8:1'].set(True)
             dialog.pair_vars['9:4'].set(True)
+            dialog.pair_vars['10:1'].set(True)
             dialog.transparent.set(True)
             dialog.choose_lower_skills(False)
             dialog.lower_skill_vars[11].set(True)
@@ -124,7 +131,7 @@ class SettingsTests(unittest.TestCase):
             dialog.apply()
             saved = next(x for x in files['loot-filter-rules.json'] if x['field'] == '近战伤害增加')
             self.assertEqual((saved['min'], saved['enabled']), (29, True))
-            self.assertEqual(files['loot-overlay-settings.json']['legendary_pairs'], ['8:1', '9:4'])
+            self.assertEqual(files['loot-overlay-settings.json']['legendary_pairs'], ['8:1', '9:4', '10:1'])
             self.assertEqual(files['loot-overlay-settings.json']['lower_skill_ids'], [11, 83])
             self.assertTrue(files['loot-overlay-settings.json']['lower_enabled'])
             self.assertNotIn('auto_pickup', files['loot-overlay-settings.json'])
@@ -157,7 +164,7 @@ class SettingsTests(unittest.TestCase):
         finally:
             root.destroy()
 
-    def test_quality_equipment_library_and_thresholds_persist_independently(self):
+    def test_complete_lock_rule_persists_with_all_its_conditions(self):
         root = tk.Tk()
         root.withdraw()
         files = {'loot-filter-rules.json': copy.deepcopy(DEFAULT_RULES), 'loot-overlay-settings.json': {}}
@@ -179,6 +186,19 @@ class SettingsTests(unittest.TestCase):
             library.part.set('武器')
             library.redraw()
             self.assertEqual(library.tree.get_children(), ('10:1:霄引',))
+            self.assertIn('灭世', library.set_groups)
+            library.query.set('')
+            library.part.set('全部部位')
+            library.set_group.set('灭世')
+            library.redraw()
+            self.assertEqual(set(library.tree.get_children()), {
+                '10:2:灭世甲', '10:3:灭世头盔', '10:4:灭世项链', '10:5:灭世手镯',
+                '10:6:灭世戒指', '10:7:灭世腰带', '10:8:灭世靴',
+            })
+            library.set_group.set('全部套装')
+            library.query.set('霄引')
+            library.part.set('武器')
+            library.redraw()
             self.assertEqual(library.threshold_options('10:1:霄引'),
                              ('攻击下限', '攻击上限', '魔法下限', '魔法上限'))
             self.assertEqual(library.threshold_label('10:1:霄引', '魔法上限'),
@@ -186,7 +206,7 @@ class SettingsTests(unittest.TestCase):
             library.toggle('10:1:霄引')
             library.set_threshold('10:1:霄引', {'魔法上限': 48})
             dialog.apply()
-            saved = files['loot-overlay-settings.json']['lock_library']
+            saved = files['loot-overlay-settings.json']['lock_library']['rules'][0]
             self.assertEqual(saved['qualities'], ['完美'])
             self.assertEqual(saved['quality_tiers'], [10])
             self.assertEqual(saved['equipment_keys'], ['10:1:霄引'])
@@ -197,6 +217,70 @@ class SettingsTests(unittest.TestCase):
             self.assertTrue(reopened.lock_library.quality_tier_vars[10].get())
             self.assertEqual(reopened.lock_library.thresholds['10:1:霄引'], {'魔法上限': 48})
             reopened.cancel()
+        finally:
+            root.destroy()
+
+    def test_switching_rules_and_saving_keeps_separate_conditions(self):
+        from lock_library import selected_indices
+        from test_lock_library import item
+        root = tk.Tk(); root.withdraw()
+        files = {'loot-filter-rules.json': copy.deepcopy(DEFAULT_RULES)}
+        class Host:
+            def read_file(self, name, default=None): return copy.deepcopy(files.get(name, default))
+            def write_file(self, name, value): files[name] = copy.deepcopy(value)
+        host = Host(); host.root = root
+        try:
+            dialog = Settings(host, show=False)
+            editor = dialog.lock_library
+            editor.quality_vars['完美'].set(True)
+            editor.quality_tier_vars[10].set(True)
+            editor.add_rule()
+            editor.query.set('霄引'); editor.redraw(); editor.toggle('10:1:霄引')
+            editor.set_threshold('10:1:霄引', {'魔法上限': 48})
+            editor.upper.set(True)
+            editor.select_rule(0)
+            self.assertTrue(editor.quality_vars['完美'].get())
+            self.assertFalse(editor.upper.get())
+            dialog.apply()
+            reopened = Settings(host, show=False)
+            reopened.lock_library.select_rule(1)
+            self.assertTrue(reopened.lock_library.upper.get())
+            self.assertEqual(reopened.lock_library.thresholds, {'10:1:霄引': {'魔法上限': 48}})
+            rules = reopened.lock_library.values()['lock_library']
+            ordinary = item(quality=1)
+            self.assertEqual(selected_indices([{'index': 4, 'item': ordinary}], rules), set())
+            ordinary['技能1'] = 64
+            self.assertEqual(selected_indices([{'index': 4, 'item': ordinary}], rules), {4})
+            reopened.cancel(); dialog.cancel()
+        finally:
+            root.destroy()
+
+    def test_deleting_rule_keeps_survivor_and_equipment_name_click_does_not_toggle_scope(self):
+        from types import SimpleNamespace
+        root = tk.Tk(); root.withdraw()
+        class Host:
+            def read_file(self, name, default=None):
+                return copy.deepcopy(DEFAULT_RULES) if name == 'loot-filter-rules.json' else {}
+            def write_file(self, name, value): pass
+        host = Host(); host.root = root
+        try:
+            dialog = Settings(host, show=False); editor = dialog.lock_library
+            editor.quality_vars['完美'].set(True)
+            editor.add_rule(); editor.upper.set(True)
+            editor.select_rule(0); editor.delete_rule()
+            self.assertTrue(editor.upper.get())
+            self.assertFalse(editor.quality_vars['完美'].get())
+            dialog.window.geometry('1000x800+-10000+-10000'); dialog.window.deiconify()
+            dialog.features.select(editor.tab)
+            editor.query.set('霄引'); editor.redraw(); root.update()
+            box = editor.tree.bbox('10:1:霄引', 'name')
+            self.assertTrue(box)
+            editor.clicked(SimpleNamespace(x=box[0]+10, y=box[1]+10))
+            self.assertNotIn('10:1:霄引', editor.model.selected)
+            box = editor.tree.bbox('10:1:霄引', 'selected')
+            editor.clicked(SimpleNamespace(x=box[0]+10, y=box[1]+10))
+            self.assertIn('10:1:霄引', editor.model.selected)
+            dialog.cancel()
         finally:
             root.destroy()
 

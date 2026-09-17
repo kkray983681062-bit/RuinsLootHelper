@@ -14,7 +14,7 @@ from game_install import discover, resolve_game
 from release_runtime import write_json
 from worker_process import ProcessBackend
 
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 TITLE = '破晓装备助手'
 DATA_NAME = 'RuinsLootHelper'
 
@@ -60,7 +60,17 @@ def prepare_settings(directory):
         if not (directory / name).exists():
             write_json(directory, name, default)
     # Migrate old application preferences if an earlier build wrote pickup data.
-    saved = load_json(directory / 'loot-overlay-settings.json', {})
+    saved = load_json(directory / 'loot-overlay-settings.json', None)
+    if not isinstance(saved, dict):
+        return  # The existing recovery path preserves corrupt files for diagnosis.
+    from lock_library import rules_from_settings
+    library = saved.get('lock_library', {})
+    if not isinstance(library, dict) or library.get('schema') != 2:
+        backup = 'loot-overlay-settings.pre-lock-rules-v2.json'
+        if not (directory / backup).exists():
+            write_json(directory, backup, saved)
+        saved['lock_library'] = {'schema': 2, 'rules': rules_from_settings(saved)}
+        write_json(directory, 'loot-overlay-settings.json', saved)
     if 'auto_pickup' in saved:
         saved.pop('auto_pickup')
         write_json(directory, 'loot-overlay-settings.json', saved)

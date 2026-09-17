@@ -42,8 +42,21 @@ class LockLibraryTests(unittest.TestCase):
         self.assertFalse(rules.matches(item(tier=9)))
         self.assertFalse(rules.matches(item(quality=2)))
 
-    def test_exact_equipment_is_independent_of_quality(self):
-        rules = LockLibrary(CATALOG, {"equipment_keys": ["9:1:追风"]})
+    def test_quality_rule_locks_unlisted_current_t6_equipment(self):
+        rules = LockLibrary(CATALOG, {"qualities": ["完美"], "quality_tiers": [10]})
+        for quality in (3, "完美"):
+            with self.subTest(quality=quality):
+                current_item = item(name="新版T6套装", tier=10, quality=quality)
+                self.assertEqual(rules.reasons(current_item), ("quality",))
+                self.assertTrue(rules.matches(current_item))
+        self.assertFalse(rules.matches(item(name="新版T6套装", tier=9, quality=3)))
+
+    def test_bad_item_tier_does_not_break_quality_locking(self):
+        rules = LockLibrary(CATALOG, {"qualities": ["完美"], "quality_tiers": [10]})
+        self.assertFalse(rules.matches(item(tier=[])))
+
+    def test_unconditional_equipment_lock_requires_an_explicit_option(self):
+        rules = LockLibrary(CATALOG, {"equipment_keys": ["9:1:追风"], "keep_all": True})
         self.assertTrue(rules.matches(item(name="追风", tier=9, quality=0)))
 
     def test_all_filled_thresholds_for_one_item_are_required(self):

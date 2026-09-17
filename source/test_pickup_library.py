@@ -38,6 +38,15 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]['key'], '9:1:追风')
 
+    def test_current_t6_set_members_are_grouped_and_filterable(self):
+        from gear_view import catalog_data
+        library = EquipmentLibrary(catalog_data()['equipment'])
+        result = library.find(tier=10, set_name='灭世')
+        self.assertEqual({row['name'] for row in result}, {
+            '灭世甲', '灭世头盔', '灭世项链', '灭世手镯', '灭世戒指', '灭世腰带', '灭世靴',
+        })
+        self.assertEqual({row['set_name'] for row in result}, {'灭世'})
+
     def test_codex_selection_is_searchable_and_kept_separate_from_equipment(self):
         from pickup_library import ExclusionLibrary, codex_selection
         library = ExclusionLibrary(self.rows, ['9:1:追风'])

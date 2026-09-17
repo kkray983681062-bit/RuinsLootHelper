@@ -94,6 +94,19 @@ class FilterTests(unittest.TestCase):
         self.assertEqual([x['index'] for x in result['legendary']], [0, 1])
         self.assertEqual(m.select_sections(payload, settings={'legendary_pairs': []})['legendary'], [])
 
+    def test_t6_inherent_skill_can_be_selected_by_tier_and_slot(self):
+        m = self.module()
+        t6_weapon = next(x for x in m.catalog_data()['equipment']
+                         if x['tier_raw'] == 10 and x['type_id'] == 1)
+        payload = {'items': [
+            {'index': 0, 'item': {'名字': t6_weapon['name'], '等阶': 10, '技能1': 64}},
+        ]}
+        self.assertEqual(
+            [x['index'] for x in m.select_sections(payload, settings={'legendary_pairs': ['10:1']})['legendary']],
+            [0],
+        )
+        self.assertEqual(m.select_sections(payload, settings={'legendary_pairs': ['9:1']})['legendary'], [])
+
     def test_catalog_skill_names_are_from_enum_values_not_editor_suffixes(self):
         m = self.module()
         self.assertEqual(m.skill_view(64)['name'], '冲刺无冷却')
@@ -107,6 +120,9 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(len(t6), 24)
         xiaoyin = next(row for row in t6 if row['name'] == '霄引')
         self.assertEqual(xiaoyin['base']['基础属性']['魔法上限'], 48)
+        self.assertEqual(next(row for row in t6 if row['name'] == '灭世戒指')['set_name'], '灭世')
+        self.assertEqual(next(row for row in t6 if row['name'] == '星陨法衣')['set_name'], '星陨')
+        self.assertEqual(next(row for row in t6 if row['name'] == '冥墟头盔')['set_name'], '冥墟')
 
     def test_locked_gear_is_hidden_in_both_sections(self):
         m = self.module()

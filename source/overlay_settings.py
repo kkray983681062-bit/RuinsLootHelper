@@ -69,6 +69,8 @@ class Settings:
         self.feature_settings = FeatureSettings(self)
         from overlay_native import NativeSettings
         self.native_settings = NativeSettings(self)
+        from overlay_lock_library import LockLibrarySettings
+        self.lock_library = LockLibrarySettings(self)
         self.visual_tab = tk.Frame(self.features, bg=BG)
         self.features.add(self.visual_tab, text='悬浮窗')
         label(self.visual_tab, '悬浮窗', size=20, bold=True).pack(anchor='w', pady=(6, 8))
@@ -83,8 +85,6 @@ class Settings:
         self.build_project_page(VERSION)
         from overlay_pickup_library import PickupLibrarySettings
         self.pickup_library = PickupLibrarySettings(self)
-        from overlay_lock_library import LockLibrarySettings
-        self.lock_library = LockLibrarySettings(self)
         bottom = tk.Frame(self.window, bg=BG)
         bottom.pack(side='bottom', fill='x', padx=24, pady=14, before=self.features)
         self.notice = tk.Label(bottom, text='已保存', bg=BG, fg=MUTED, anchor='w')
@@ -295,7 +295,8 @@ class Settings:
         actions = tk.Frame(self.legend_tab, bg=BG)
         actions.pack(fill='x', padx=5, pady=12)
         self.button(actions, '只选 T5', lambda: self.choose_pairs('t5')).pack(side='left')
-        self.button(actions, '全部', lambda: self.choose_pairs('all')).pack(side='left', padx=7)
+        self.button(actions, '只选 T6', lambda: self.choose_pairs('t6')).pack(side='left', padx=7)
+        self.button(actions, '全部', lambda: self.choose_pairs('all')).pack(side='left', padx=(0, 7))
         self.button(actions, '清空', lambda: self.choose_pairs('none')).pack(side='left')
         matrix = tk.Frame(self.legend_tab, bg=BG)
         matrix.pack(fill='x', padx=6)
@@ -305,7 +306,7 @@ class Settings:
         for column, kind in enumerate(self.types, 1):
             matrix.columnconfigure(column, weight=1)
             self.label(matrix, kind['label'], font=('Microsoft YaHei UI', 10)).grid(row=0, column=column, padx=1, pady=5)
-        for row, tier in enumerate(range(5, 10), 1):
+        for row, tier in enumerate(range(5, 11), 1):
             self.label(matrix, f'T{tier - 4}').grid(row=row, column=0, padx=(0, 12), pady=7)
             for column, kind in enumerate(self.types, 1):
                 key = f"{tier}:{kind['id']}"
@@ -319,11 +320,12 @@ class Settings:
 
     def choose_pairs(self, which):
         for key, var in self.pair_vars.items():
-            var.set(which == 'all' or which == 't5' and key.startswith('9:'))
+            var.set(which == 'all' or which == 't5' and key.startswith('9:')
+                    or which == 't6' and key.startswith('10:'))
         self.update_pair_count()
 
     def update_pair_count(self):
-        self.pair_count.configure(text=f'已选 {sum(v.get() for v in self.pair_vars.values())} 种组合 · 可独立选择 T4 武器、T5 项链')
+        self.pair_count.configure(text=f'已选 {sum(v.get() for v in self.pair_vars.values())} 种组合 · 可独立选择 T1–T6 × 部位')
 
     def lower_settings(self):
         self.lower_enabled = tk.BooleanVar(value=self.settings.get('lower_enabled', True))

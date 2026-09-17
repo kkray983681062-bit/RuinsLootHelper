@@ -174,5 +174,37 @@ class NativeClientTests(unittest.TestCase):
         self.assertEqual(len(command), 1)
         self.assertEqual(command[0]['index'], 4)
 
+    def test_quality_library_rule_locks_unlisted_current_t6_equipment(self):
+        snapshot = Snapshot(
+            status={'game_pid': 123}, live=True,
+            current={'items': [{'index': 4, 'item': {
+                '物品类型': 1, 'ID': 13, '锁定': False, '名字': '新版T6套装', '等阶': 10,
+                '品质': 3, '基础属性': {'攻击上限': 45, '魔法上限': 48},
+            }}]},
+            ui={'ui': {'valid': True, 'player_address': 999}},
+            settings={
+                'native': {'lock': True, 'skip_codex': True},
+                'lock_library': {'qualities': ['完美'], 'quality_tiers': [10]},
+            },
+            sections={'numeric': [], 'legendary': [], 'lower': []},
+        )
+        self.send(snapshot)
+        command = self.send(snapshot)['locks']
+        self.assertEqual([entry['index'] for entry in command], [4])
+
+    def test_old_numeric_route_cannot_bypass_a_complete_rule(self):
+        snapshot = self.snapshot()
+        snapshot.current['items'][0]['item'].update(名字='霄引', 等阶=10, 品质=1,
+            基础属性={'魔法上限': 47}, 技能1=64)
+        snapshot.settings['native']['lock_sections'] = {'numeric': True, 'legendary': True}
+        snapshot.settings['lock_library'] = {'schema': 2, 'rules': [{
+            'qualities': ['完美'], 'quality_tiers': [10], 'equipment_keys': ['10:1:霄引'],
+            'thresholds': {'10:1:霄引': {'魔法上限': 48}}, 'upper': True,
+        }]}
+        self.send(snapshot)
+        self.assertEqual(self.send(snapshot)['locks'], [])
+        snapshot.current['items'][0]['item'].update(品质=3, 基础属性={'魔法上限': 48})
+        self.assertEqual([x['index'] for x in self.send(snapshot)['locks']], [4])
+
 
 if __name__ == '__main__':unittest.main()

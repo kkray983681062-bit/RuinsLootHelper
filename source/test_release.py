@@ -53,6 +53,26 @@ class InstallDiscoveryTests(unittest.TestCase):
 
 
 class ReleaseLifecycleTests(unittest.TestCase):
+    def test_upgrade_saves_combined_rules_and_preserves_original_preferences(self):
+        from loot_app import prepare_settings
+        from lock_library import selected_indices
+        from test_lock_library import item
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = pathlib.Path(tmp)
+            old = {'width': 512, 'native': {'lock': True, 'lock_sections': {'numeric': True}},
+                   'lock_library': {'qualities': ['完美'], 'quality_tiers': [10],
+                                    'equipment_keys': ['10:1:霄引'], 'thresholds': {'10:1:霄引': {'魔法上限': 48}}}}
+            path = directory / 'loot-overlay-settings.json'
+            path.write_text(json.dumps(old), encoding='utf8')
+            prepare_settings(directory)
+            saved = json.loads(path.read_text(encoding='utf8'))
+            self.assertEqual(saved['width'], 512)
+            self.assertEqual(saved['lock_library']['schema'], 2)
+            self.assertEqual(selected_indices([{'index': 4, 'item': item(magic=47)}], saved['lock_library']), set())
+            self.assertEqual(json.loads((directory/'loot-overlay-settings.pre-lock-rules-v2.json').read_text(encoding='utf8')), old)
+            prepare_settings(directory)
+            self.assertEqual(json.loads(path.read_text(encoding='utf8')), saved)
+
     def test_new_profile_has_no_old_coordinates_or_automatic_pickup(self):
         from loot_app import prepare_settings
         with tempfile.TemporaryDirectory() as tmp:

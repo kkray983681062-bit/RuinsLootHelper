@@ -46,6 +46,9 @@ class EquipmentLibrary:
         unique = {}
         for source in rows:
             row = {k: source[k] for k in ('name', 'label', 'tier_raw', 'tier', 'type_id', 'type_label')}
+            set_name = source.get('set_name')
+            if isinstance(set_name, str) and set_name:
+                row['set_name'] = set_name
             if row['type_id'] == 9:
                 row['type_label'] = '宝物'
             row['key'] = equipment_key(row)
@@ -54,13 +57,23 @@ class EquipmentLibrary:
         selected = selected if isinstance(selected, (list, tuple, set)) else ()
         self.selected = {value for value in selected if isinstance(value, str)}
 
-    def find(self, query='', tier=None, type_id=None, only_selected=False):
+    def find(self, query='', tier=None, type_id=None, only_selected=False, set_name=None):
         words = query.strip().casefold().split()
+        def matches_set(row):
+            if set_name is None:
+                return True
+            if set_name is True:
+                return bool(row.get('set_name'))
+            if set_name is False:
+                return not row.get('set_name')
+            return row.get('set_name') == set_name
         return [r for r in self.rows
                 if (tier is None or r['tier_raw'] == tier)
                 and (type_id is None or r['type_id'] == type_id)
                 and (not only_selected or r['key'] in self.selected)
-                and all(word in f"{r['label']} {r['name']} {r['tier']} {r['type_label']}".casefold() for word in words)]
+                and matches_set(r)
+                and all(word in f"{r['label']} {r['name']} {r['tier']} {r['type_label']} {r.get('set_name', '')}".casefold()
+                        for word in words)]
 
     def toggle(self, key):
         if key in self.selected:

@@ -127,9 +127,12 @@ class NativeClient:
             'recycle': None}
         self.policy.observe(snapshot.current.get('items', []) if usable else [], now)
         selected = config.get('lock_sections', {'numeric': True, 'legendary': False, 'lower': False})
-        indices = {entry['index'] for key, entries in snapshot.sections.items() if selected.get(key, False) for entry in entries}
+        library_config = snapshot.settings.get('lock_library', {})
+        library_config = library_config if isinstance(library_config, dict) else {}
+        indices = set() if library_config.get('schema') == 2 else {
+            entry['index'] for key, entries in snapshot.sections.items() if selected.get(key, False) for entry in entries}
         indices.update(selected_indices(snapshot.current.get('items', []) if usable else [],
-                                       snapshot.settings.get('lock_library', {})))
+                                       library_config, snapshot.sections))
         ready = (fresh_status(native) and native.get('protocol') == PROTOCOL and native.get('ready') and native.get('session') == self.session
                  and native.get('player_address') == player and native.get('game_pid') == pid)
         if ready and self.rift_permission is None:

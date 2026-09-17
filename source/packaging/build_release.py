@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from native_support import ARCHIVE_NAME, SHA256 as RUNTIME_SHA256
 
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 STAGING = ROOT / ('release-staging-' + VERSION)
 APP = STAGING / '破晓装备助手'
 DESTINATION = ROOT / 'releases' / VERSION
@@ -48,6 +48,7 @@ def main():
     assert list((APP / '_internal/cv2').glob('*.pyd'))
     assert (APP / '_internal/assets/backpack-lock.png').is_file()
     assert {'app_update', 'update_panel', 'ui_theme', 'ui_pages', 'ui_switch', 'author_page'} <= set(archive.toc)
+    assert {'lock_library', 'overlay_lock_library'} <= set(archive.toc)
     for script in ('rifts.lua', 'bagua.lua', 'bagua_core.lua', 'bagua_game.lua'):
         assert (APP / '_internal/native/Mods/RuinsHelper/Scripts' / script).is_file()
     assert (APP / '_internal/project-links.json').is_file()
